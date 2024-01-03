@@ -37,15 +37,19 @@ if __name__ == "__main__":
         robot_model = optas.RobotModel(xacro_filename=xacro_filename)
 
     elif model == "fetch":
-        urdf_filename = os.path.join(cwd, "robots", "fetch", "fetch.urdf")
+        urdf_filename = os.path.join(cwd, "robots", "fetch", "fetch_gripper.urdf")
         print(urdf_filename)
         robot_model = optas.RobotModel(urdf_filename=urdf_filename)
 
     vis = Visualizer(camera_position=[3, 3, 3])
     vis.grid_floor()
+    q = robot_model.get_random_joint_positions()
+    print(robot_model.actuated_joint_names)
+    print(q)
+    
     vis.robot(
         robot_model,
-        q=robot_model.get_random_joint_positions(),
+        q=q,
         show_links=True,
         display_link_names=True,
         link_names_alpha=0.4,

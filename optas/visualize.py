@@ -989,14 +989,7 @@ class Visualizer:
                     continue
 
                 geometry = visual.geometry
-
-                xyz, rpy = cs.DM.zeros(3), cs.DM.zeros(3)
-                if visual.origin is not None:
-                    xyz, rpy = cs.DM(visual.origin.xyz), cs.DM(visual.origin.rpy)
-
-                T_vis = rt2tr(rpy2r(rpy), xyz).toarray()
-
-                T = tf @ T_vis
+                T = tf
                 position = transl(T).toarray().flatten()
                 orientation = Rot.from_matrix(T[:3, :3]).as_quat().tolist()
 
