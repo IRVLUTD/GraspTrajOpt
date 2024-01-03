@@ -2,12 +2,14 @@ import os
 import sys
 import argparse
 import pathlib
+import numpy as np
 
 cwd = pathlib.Path(__file__).parent.resolve()  # path to current working directory
 sys.path.append(os.path.join(cwd, ".."))
 import optas
 from optas.visualize import Visualizer
 from utils import parse_grasps
+from transforms3d.quaternions import mat2quat
 
 
 def make_args():
@@ -46,8 +48,8 @@ if __name__ == "__main__":
     grasp_file = os.path.join(grasp_dir, f"fetch_gripper-{model}.json")
     RT_grasps = parse_grasps(grasp_file)
 
-    # load robot model
-    urdf_filename = os.path.join(cwd, "robots", "fetch", "fetch.urdf")
+    # load robot gripper model
+    urdf_filename = os.path.join(cwd, "robots", "fetch", "fetch_gripper.urdf")
     print(urdf_filename)
     robot_model = optas.RobotModel(urdf_filename=urdf_filename)
 
@@ -63,6 +65,22 @@ if __name__ == "__main__":
 
     print(robot_model)
     print(robot_model.link_names)
+
+    # visualize grasps
+    q = [0.05, 0.05]
+    n = RT_grasps.shape[0]
+    for i in np.random.permutation(n)[:5]:
+        RT_g = RT_grasps[i]
+        print(RT_g)
+        position = RT_g[:3, 3]
+        orientation = mat2quat(RT_g[:3, :3])
+        
+        vis.robot(
+            robot_model,
+            base_position=position,
+            base_orientation=orientation,
+            q=q
+        )
 
     save = False
     if save:

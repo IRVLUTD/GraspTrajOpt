@@ -889,6 +889,10 @@ class Visualizer:
     def robot(
         self,
         robot_model: RobotModel,
+        base_position: ArrayType = [0.0, 0.0, 0.0],
+        base_orientation: ArrayType = [0.0, 0.0, 0.0],
+        euler_seq: str = "xyz",
+        euler_degrees: bool = False,        
         q: ArrayType = None,
         alpha: float = 1.0,
         show_links: bool = False,
@@ -905,6 +909,10 @@ class Visualizer:
         """! Draw a robot.
 
         @param robot_model The robot model defining the robot kinematics and visuals.
+        @param base_position The position of the robot.
+        @param base_orientation Orientation of the robot, either a quaternion or Euler angles.
+        @param euler_seq When orientation are Euler angles, specifies sequence of axes for rotations. Up to 3 characters belonging to the set {'X', 'Y', 'Z'} for intrinsic rotations, or {'x', 'y', 'z'} for extrinsic rotations. When orientation are Euler angles, extrinsic and intrinsic rotations cannot be mixed in one function call.
+        @param euler_degrees If True, then the given angles are assumed to be in degrees. Default is False.        
         @param q Joint configuration to draw robot.
         @param alpha Transparency of the actor in range [0, 1].
         @param show_links When true, the robot links are shown.
@@ -921,6 +929,12 @@ class Visualizer:
         """
         if link_center_alpha is None:
             link_center_alpha = alpha
+
+        # compute robot base tf
+        R = Visualizer.cvt_orientation_to_rotation_matrix(
+            base_orientation, euler_seq, euler_degrees
+        )
+        tf_base = rt2tr(R, base_position)            
 
         actors = []
 
@@ -955,7 +969,8 @@ class Visualizer:
             xyz, rpy = robot_model.get_link_visual_origin(urdf_link)
             visl_tf = rt2tr(rpy2r(rpy), xyz)
 
-            tf = lnk_tf @ visl_tf
+            # move robot base as well
+            tf = tf_base @ lnk_tf @ visl_tf
             visual_tf[name] = cs.Function(f"visual_tf_{name}", [q], [tf])
 
         for urdf_link in urdf.links:

@@ -49,6 +49,9 @@ if __name__ == "__main__":
     
     vis.robot(
         robot_model,
+        base_position=[0.0, 0, 0],
+        base_orientation=[0, 0, 0],
+        euler_degrees=True,
         q=q,
         show_links=True,
         display_link_names=True,
