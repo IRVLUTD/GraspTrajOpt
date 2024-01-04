@@ -5,7 +5,7 @@ import pathlib
 import numpy as np
 
 cwd = pathlib.Path(__file__).parent.resolve()  # path to current working directory
-sys.path.append(os.path.join(cwd, ".."))
+import _init_paths
 import optas
 from optas.visualize import Visualizer
 from utils import parse_grasps
