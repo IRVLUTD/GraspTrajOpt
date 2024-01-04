@@ -73,7 +73,9 @@ if __name__ == "__main__":
         RT_g = RT_grasps[i]
         print(RT_g)
         position = RT_g[:3, 3]
-        orientation = mat2quat(RT_g[:3, :3])
+        # scalar-last (x, y, z, w) format in optas
+        quat = mat2quat(RT_g[:3, :3])
+        orientation = [quat[1], quat[2], quat[3], quat[0]]
         
         vis.robot(
             robot_model,
