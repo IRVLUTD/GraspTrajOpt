@@ -1,9 +1,3 @@
-"""
-CS 6384 Homework 2 Programming
-Implement the look_at_box_front() function in this python script
-to capture an image of the box from its front side
-"""
-
 import os
 import time
 import numpy as np
