@@ -39,13 +39,6 @@ def make_args():
         description="Generate grid and spawn objects", add_help=True
     )
     parser.add_argument(
-        "-m",
-        "--model",
-        type=str,
-        default="003_cracker_box",
-        help="object model name",
-    )
-    parser.add_argument(
         "-d",
         "--data_dir",
         type=str,
@@ -65,7 +58,6 @@ def make_args():
 
 if __name__ == "__main__":
     args = make_args()
-    model = args.model
     data_dir = args.data_dir
     scene_id = args.scene_id
     model_dir = os.path.join(args.data_dir, "models")
