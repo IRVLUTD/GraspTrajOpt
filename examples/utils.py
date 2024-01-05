@@ -3,6 +3,61 @@ import numpy as np
 from transforms3d.quaternions import quat2mat
 
 
+def rotX(rotx):
+    RotX = np.array(
+        [
+            [1, 0, 0, 0],
+            [0, np.cos(rotx), -np.sin(rotx), 0],
+            [0, np.sin(rotx), np.cos(rotx), 0],
+            [0, 0, 0, 1],
+        ]
+    )
+    return RotX
+
+def rotY(roty):
+    RotY = np.array(
+        [
+            [np.cos(roty), 0, np.sin(roty), 0],
+            [0, 1, 0, 0],
+            [-np.sin(roty), 0, np.cos(roty), 0],
+            [0, 0, 0, 1],
+        ]
+    )
+    return RotY
+
+
+def rotZ(rotz):
+    RotZ = np.array(
+        [
+            [np.cos(rotz), -np.sin(rotz), 0, 0],
+            [np.sin(rotz), np.cos(rotz), 0, 0],
+            [0, 0, 1, 0],
+            [0, 0, 0, 1],
+        ]
+    )
+    return RotZ
+
+
+def unpack_pose(pose, rot_first=False):
+    unpacked = np.eye(4)
+    if rot_first:
+        unpacked[:3, :3] = quat2mat(pose[:4])
+        unpacked[:3, 3] = pose[4:]
+    else:
+        unpacked[:3, :3] = quat2mat(pose[3:])
+        unpacked[:3, 3] = pose[:3]
+    return unpacked
+
+
+def se3_inverse(RT):
+    R = RT[:3, :3]
+    T = RT[:3, 3].reshape((3, 1))
+    RT_new = np.eye(4, dtype=np.float32)
+    RT_new[:3, :3] = R.transpose()
+    RT_new[:3, 3] = -1 * np.dot(R.transpose(), T).reshape((3))
+    return RT_new
+
+
 def ros_qt_to_rt(rot, trans):
     qt = np.zeros((4,), dtype=np.float32)
     qt[0] = rot[3]
