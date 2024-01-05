@@ -142,8 +142,8 @@ class SceneReplicaEnv():
 
         fov = 45
         aspect = float(self._window_width) / (self._window_height)
-        head_near = 0.01
-        head_far = 100
+        head_near = 0.1
+        head_far = 10
         head_proj_matrix = p.computeProjectionMatrixFOV(
             fov, aspect, head_near, head_far
         )
@@ -166,6 +166,7 @@ class SceneReplicaEnv():
             lightDirection,
             head_near,
             head_far,
+            cam_pose_mat,
         )            
 
 
@@ -182,6 +183,7 @@ class SceneReplicaEnv():
             lightDirection,
             near,
             far,
+            cam_pose,
         ) = self.get_camera_view()        
 
         _, _, rgba, depth, mask = p.getCameraImage(width=self._window_width,
@@ -193,24 +195,44 @@ class SceneReplicaEnv():
                                                    lightDistance=lightDistance,
                                                    physicsClientId=self.cid,
                                                    renderer=p.ER_BULLET_HARDWARE_OPENGL)
+        
+        # transform depth from NDC to actual depth        
+        depth = far * near / (far - (far - near) * depth)
+
+        # backprojection
+        intrinsic_matrix = projection_to_intrinsics(head_proj_matrix, self._window_width, self._window_height)
+        object_mask = mask > 2
+        pc = backproject_camera_target(depth, intrinsic_matrix, object_mask)
+
+        # transform points to robot base
+        pc_base = cam_pose[:3, :3] @ pc + cam_pose[:3, 3].reshape((3, 1))
+        pc_base = pc_base.T
                                                    
         # visualization
         fig = plt.figure()
         
         # show RGB image
-        ax = fig.add_subplot(1, 3, 1)
+        ax = fig.add_subplot(2, 2, 1)
         plt.imshow(rgba[:, :, :3])
         ax.set_title('RGB image')
         
         # show depth image
-        ax = fig.add_subplot(1, 3, 2)
+        ax = fig.add_subplot(2, 2, 2)
         plt.imshow(depth)
         ax.set_title('depth image')
         
         # show segmentation mask
-        ax = fig.add_subplot(1, 3, 3)
+        ax = fig.add_subplot(2, 2, 3)
         plt.imshow(mask)
-        ax.set_title('segmentation mask')                  
+        ax.set_title('segmentation mask')   
+
+        ax = fig.add_subplot(2, 2, 4, projection='3d')
+        ax.scatter(pc_base[:, 0], pc_base[:, 1], pc_base[:, 2], marker='.', color='r')
+        ax.set_xlabel('X')
+        ax.set_ylabel('Y')
+        ax.set_zlabel('Z')
+        ax.set_title('3D ploud cloud in robot base')   
+        set_axes_equal(ax)                    
         plt.show()
     
 
@@ -285,11 +307,7 @@ if __name__ == '__main__':
         # scalar-last (x, y, z, w) format in optas
         orientation = [quat[1], quat[2], quat[3], quat[0]]
         env.place_objects(filename, position, orientation)
-        print(obj, position, orientation)    
-    
-    # place the cracker box to the table
-    # name = '003_cracker_box'
-    # env.place_objects(name)
+        print(obj, position, orientation)
 
     # render image before looking at the box
     env.get_observation()
