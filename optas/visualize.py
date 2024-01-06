@@ -22,6 +22,7 @@ from .models import RobotModel
 from .spatialmath import *
 
 from typing import List, Union, Dict
+import random
 
 
 class ActorList:
@@ -73,6 +74,43 @@ class AnimationCallback:
         # Reset
         self.step = (self.step + 1) % self.nsteps
         self.prev = current
+
+
+class VtkPointCloud:
+
+    def __init__(self, zMin=-10.0, zMax=10.0, maxNumPoints=1e6):
+        self.maxNumPoints = maxNumPoints
+        self.vtkPolyData = vtk.vtkPolyData()
+        self.clearPoints()
+        mapper = vtk.vtkPolyDataMapper()
+        mapper.SetInputData(self.vtkPolyData)
+        mapper.SetColorModeToDefault()
+        mapper.SetScalarRange(zMin, zMax)
+        mapper.SetScalarVisibility(1)
+        self.vtkActor = vtk.vtkActor()
+        self.vtkActor.SetMapper(mapper)
+
+    def addPoint(self, point):
+        if self.vtkPoints.GetNumberOfPoints() < self.maxNumPoints:
+            pointId = self.vtkPoints.InsertNextPoint(point[:])
+            self.vtkDepth.InsertNextValue(point[2])
+            self.vtkCells.InsertNextCell(1)
+            self.vtkCells.InsertCellPoint(pointId)
+        else:
+            r = random.randint(0, self.maxNumPoints)
+            self.vtkPoints.SetPoint(r, point[:])
+        self.vtkCells.Modified()
+        self.vtkPoints.Modified()
+        self.vtkDepth.Modified()
+
+    def clearPoints(self):
+        self.vtkPoints = vtk.vtkPoints()
+        self.vtkCells = vtk.vtkCellArray()
+        self.vtkDepth = vtk.vtkDoubleArray()
+        self.vtkDepth.SetName('DepthArray')
+        self.vtkPolyData.SetPoints(self.vtkPoints)
+        self.vtkPolyData.SetVerts(self.vtkCells)
+        self.vtkPolyData.GetPointData().SetScalars(self.vtkDepth)
 
 
 class Visualizer:
@@ -292,6 +330,33 @@ class Visualizer:
         self.actors.append(actor)
 
         return actor
+    
+    @arrayify_args
+    def points(
+        self,
+        data: ArrayType,
+        rgb: Union[None, ArrayType] = None,
+        alpha: float = 1.0,
+    ) -> vtk.vtkActor:
+        """! Draw 3D points.
+
+        @param data The 3D points with shape [N, 3]
+        @param rgb The Red-Green-Blue values in range [0, 1].
+        @param alpha Transparency of the actor in range [0, 1].
+        @return The points actor.
+        """
+
+        pointCloud = VtkPointCloud()
+        data = data.toarray().flatten().tolist()
+        num = int(len(data) / 3)
+        for i in range(num):
+            pointCloud.addPoint(data[3*i:3*i+3])
+
+        actor = pointCloud.vtkActor
+        self.set_rgba(actor, rgb, alpha)
+        self.actors.append(actor)
+
+        return actor    
 
     @arrayify_args
     def sphere(

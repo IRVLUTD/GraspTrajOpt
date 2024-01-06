@@ -9,6 +9,11 @@ from pybullet_api import Fetch
 from utils import *
 import _init_paths
 from mesh_to_sdf.depth_point_cloud import DepthPointCloud
+import optas
+from optas.visualize import Visualizer
+
+import pathlib
+cwd = pathlib.Path(__file__).parent.resolve()  # path to current working directory
 
 
 def pybullet_show_frame(RT):
@@ -96,6 +101,7 @@ class SceneReplicaEnv():
 
         # Set table and plane
         self.object_uids = []
+        self.object_names = []
         plane_file = os.path.join(self.root_dir, 'objects/floor/model_normalized.urdf') # _white
         table_file = os.path.join(self.root_dir, 'objects/cafe_table/cafe_table.urdf')
 
@@ -116,15 +122,21 @@ class SceneReplicaEnv():
         return bid
 
 
-    def place_objects(self, urdf_filename, position, orientation):
+    def place_objects(self, urdf_filename, name, position, orientation):
         """
         Place of an object to the scene
         """
         uid = self._add_mesh(urdf_filename, position, orientation)  # xyzw
         self.object_uids.append(uid)
+        self.object_names.append(name)
         p.resetBaseVelocity(uid, (0.0, 0.0, 0.0), (0.0, 0.0, 0.0))
         for _ in range(100):
             p.stepSimulation()
+
+
+    def get_object_pose(self, name):
+        index = self.object_names.index(name)
+        return p.getBasePositionAndOrientation(self.object_uids[index])     
 
 
     def get_camera_view(self):
@@ -197,10 +209,12 @@ class SceneReplicaEnv():
 
         # backprojection
         intrinsic_matrix = projection_to_intrinsics(head_proj_matrix, self._window_width, self._window_height)
-        depth_pc = DepthPointCloud(depth, intrinsic_matrix, cam_pose, mask)
-        pc_base = depth_pc.points
-        depth_pc.show()
-                                                   
+        depth_pc = DepthPointCloud(depth, intrinsic_matrix, cam_pose, mask)        
+        # depth_pc.show()
+        return depth_pc
+
+
+    def visualize_data(self, rgba, depth, mask, depth_pc):                                               
         # visualization
         fig = plt.figure()
         
@@ -220,6 +234,7 @@ class SceneReplicaEnv():
         ax.set_title('segmentation mask')   
 
         ax = fig.add_subplot(2, 2, 4, projection='3d')
+        pc_base = depth_pc.points
         ax.scatter(pc_base[:, 0], pc_base[:, 1], pc_base[:, 2], marker='.', color='r')
         ax.set_xlabel('X')
         ax.set_ylabel('Y')
@@ -282,9 +297,13 @@ if __name__ == '__main__':
     grasp_dir = os.path.join(args.data_dir, "grasp_data", "refined_grasps")
     scenes_path = os.path.join(args.data_dir, "final_scenes", "scene_data")    
 
+    # load robot gripper model
+    urdf_filename = os.path.join(cwd, "robots", "fetch", "fetch_gripper.urdf")
+    print(urdf_filename)
+    gripper_model = optas.RobotModel(urdf_filename=urdf_filename)    
+
     # create the table environment
     env = SceneReplicaEnv()
-
     # add objects
     print(f"-----------Scene: {scene_id}---------------")
     meta_f = "meta-%06d.mat" % scene_id
@@ -299,8 +318,33 @@ if __name__ == '__main__':
         quat = meta["poses"][i][3:]
         # scalar-last (x, y, z, w) format in optas
         orientation = [quat[1], quat[2], quat[3], quat[0]]
-        env.place_objects(filename, position, orientation)
+        env.place_objects(filename, obj, position, orientation)
         print(obj, position, orientation)
 
-    # render image before looking at the box
-    env.get_observation()
+    # render image
+    depth_pc = env.get_observation()
+            
+    # visualization
+    vis = Visualizer(camera_position=[1, 1, 1])
+    vis.grid_floor()
+    vis.points(
+        depth_pc.points,
+    )
+    
+    # two orderings
+    for ordering in {"nearest_first", "random"}:
+        object_order = meta[ordering][0].split(",")
+        # for each object
+        for object_name in object_order:
+            # load grasps
+            grasp_file = os.path.join(grasp_dir, f"fetch_gripper-{object_name}.json")
+            RT_grasps = parse_grasps(grasp_file)
+
+            # query object pose
+            pos, orn = env.get_object_pose(object_name)
+            obj_pose = list(pos) + [orn[3], orn[0], orn[1], orn[2]]
+            RT_obj = unpack_pose(obj_pose)
+            print(object_name, RT_obj)
+
+          
+    vis.start()
