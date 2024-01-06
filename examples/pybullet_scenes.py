@@ -11,6 +11,7 @@ import _init_paths
 from mesh_to_sdf.depth_point_cloud import DepthPointCloud
 import optas
 from optas.visualize import Visualizer
+from transforms3d.quaternions import mat2quat
 
 import pathlib
 cwd = pathlib.Path(__file__).parent.resolve()  # path to current working directory
@@ -323,13 +324,11 @@ if __name__ == '__main__':
 
     # render image
     depth_pc = env.get_observation()
-            
-    # visualization
-    vis = Visualizer(camera_position=[1, 1, 1])
-    vis.grid_floor()
-    vis.points(
-        depth_pc.points,
-    )
+
+    # define the standoff pose
+    offset = -0.01
+    pose_standoff = np.eye(4, dtype=np.float32)
+    pose_standoff[0, 3] = offset
     
     # two orderings
     for ordering in {"nearest_first", "random"}:
@@ -346,5 +345,32 @@ if __name__ == '__main__':
             RT_obj = unpack_pose(obj_pose)
             print(object_name, RT_obj)
 
-          
-    vis.start()
+            # transform grasps to robot base
+            n = RT_grasps.shape[0]
+            RT_grasps_base = np.zeros_like(RT_grasps)
+            for i in range(n):
+                RT_g = RT_grasps[i]
+                RT = RT_obj @ RT_g
+                RT_grasps_base[i] = RT
+
+            # visualize grasps
+            vis = Visualizer(camera_position=[3, 0, 3])
+            vis.grid_floor()
+            vis.points(
+                depth_pc.points,
+            )                
+
+            q = [0.05, 0.05]
+            for i in np.random.permutation(n)[:5]:
+                RT_g = RT_grasps_base[i] @ pose_standoff
+                position = RT_g[:3, 3]
+                # scalar-last (x, y, z, w) format in optas
+                quat = mat2quat(RT_g[:3, :3])
+                orientation = [quat[1], quat[2], quat[3], quat[0]]
+                vis.robot(
+                    gripper_model,
+                    base_position=position,
+                    base_orientation=orientation,
+                    q=q
+                )
+            vis.start()
