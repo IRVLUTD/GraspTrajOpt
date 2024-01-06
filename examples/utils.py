@@ -115,29 +115,6 @@ def set_axes_equal(ax):
     ax.set_zlim3d([z_middle - plot_radius, z_middle + plot_radius])
 
 
-def backproject_camera_target(im_depth, K, target_mask=None):  
-    Kinv = np.linalg.inv(K)
-
-    width = im_depth.shape[1]
-    height = im_depth.shape[0]
-    depth = im_depth.astype(np.float32, copy=True).flatten()
-    if target_mask is not None:
-        mask = (depth != 0) * (target_mask.flatten() > 0)
-    else:
-        mask = (depth != 0)
-
-    x, y = np.meshgrid(np.arange(width), np.arange(height))
-    ones = np.ones((height, width), dtype=np.float32)
-    x2d = np.stack((x, y, ones), axis=2).reshape(width * height, 3)  # each pixel
-
-    # backprojection
-    R = Kinv.dot(x2d.transpose())  #
-    X = np.multiply(
-        np.tile(depth.reshape(1, width * height), (3, 1)), R
-    )
-    return X[:, mask]
-
-
 def parse_grasps(filename):
     with open(filename, "r") as f:
         data = json.load(f)

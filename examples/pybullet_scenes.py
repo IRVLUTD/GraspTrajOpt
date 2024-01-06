@@ -7,6 +7,8 @@ import scipy
 import matplotlib.pyplot as plt
 from pybullet_api import Fetch
 from utils import *
+import _init_paths
+from mesh_to_sdf.depth_point_cloud import DepthPointCloud
 
 
 def pybullet_show_frame(RT):
@@ -195,12 +197,9 @@ class SceneReplicaEnv():
 
         # backprojection
         intrinsic_matrix = projection_to_intrinsics(head_proj_matrix, self._window_width, self._window_height)
-        object_mask = mask > 2
-        pc = backproject_camera_target(depth, intrinsic_matrix, object_mask)
-
-        # transform points to robot base
-        pc_base = cam_pose[:3, :3] @ pc + cam_pose[:3, 3].reshape((3, 1))
-        pc_base = pc_base.T
+        depth_pc = DepthPointCloud(depth, intrinsic_matrix, cam_pose, mask)
+        pc_base = depth_pc.points
+        depth_pc.show()
                                                    
         # visualization
         fig = plt.figure()
