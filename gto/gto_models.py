@@ -81,7 +81,7 @@ class GTORobotModel():
 if __name__ == "__main__":
 
     model_dir = os.path.join(cwd, "../examples/robots", "fetch")
-    urdf_filename = os.path.join(model_dir, "fetch.urdf")
+    urdf_filename = os.path.join(model_dir, "fetch_gripper.urdf")
     robot_model = optas.RobotModel(urdf_filename=urdf_filename)
     gto_robot_model = GTORobotModel(model_dir, robot_model)
 
