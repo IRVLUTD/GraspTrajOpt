@@ -90,7 +90,6 @@ class DepthPointCloud:
 
 
     def is_outside(self, points):
-
         # project points to camera view
         RT = np.linalg.inv(self.camera_pose)
         pc = points.T
