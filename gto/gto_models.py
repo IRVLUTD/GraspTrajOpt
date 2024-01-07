@@ -60,11 +60,13 @@ class GTORobotModel():
         return visual_tf
     
 
-    def compute_fk_surface_points(self, q_user_input):
+    def compute_fk_surface_points(self, q_user_input, tf_base=None):
         points_base_all = np.zeros((3, 0), dtype=np.float32)
         normals_base_all = np.zeros((3, 0), dtype=np.float32)
         for name in self.surface_pc_map.keys():
             tf = self.visual_tf[name](q_user_input).toarray()
+            if tf_base is not None:
+                tf = tf_base @ tf
             surface_pc = self.surface_pc_map[name]
             points = surface_pc.points
             normals = surface_pc.normals
@@ -75,7 +77,7 @@ class GTORobotModel():
 
             points_base_all = np.concatenate((points_base_all, points_base), axis=1)
             normals_base_all = np.concatenate((normals_base_all, normals_base), axis=1)
-        return points_base_all, normals_base_all     
+        return points_base_all.T, normals_base_all.T     
 
 
 if __name__ == "__main__":
@@ -91,5 +93,5 @@ if __name__ == "__main__":
 
     # show points
     scene = pyrender.Scene()
-    scene.add(pyrender.Mesh.from_points(points_base_all.transpose(), normals=normals_base_all.transpose()))
+    scene.add(pyrender.Mesh.from_points(points_base_all, normals=normals_base_all))
     pyrender.Viewer(scene, use_raymond_lighting=True, point_size=2)

@@ -11,7 +11,9 @@ import _init_paths
 from mesh_to_sdf.depth_point_cloud import DepthPointCloud
 import optas
 from optas.visualize import Visualizer
+from gto.gto_models import GTORobotModel
 from transforms3d.quaternions import mat2quat
+import pyrender
 
 import pathlib
 cwd = pathlib.Path(__file__).parent.resolve()  # path to current working directory
@@ -299,9 +301,11 @@ if __name__ == '__main__':
     scenes_path = os.path.join(args.data_dir, "final_scenes", "scene_data")    
 
     # load robot gripper model
-    urdf_filename = os.path.join(cwd, "robots", "fetch", "fetch_gripper.urdf")
+    robot_model_dir = os.path.join(cwd, "robots", "fetch")
+    urdf_filename = os.path.join(robot_model_dir, "fetch_gripper.urdf")
     print(urdf_filename)
-    gripper_model = optas.RobotModel(urdf_filename=urdf_filename)    
+    gripper_model = optas.RobotModel(urdf_filename=urdf_filename)
+    gto_gripper_model = GTORobotModel(robot_model_dir, gripper_model)
 
     # create the table environment
     env = SceneReplicaEnv()
@@ -348,10 +352,34 @@ if __name__ == '__main__':
             # transform grasps to robot base
             n = RT_grasps.shape[0]
             RT_grasps_base = np.zeros_like(RT_grasps)
+            in_collision = np.zeros((n, ), dtype=np.int32)
             for i in range(n):
                 RT_g = RT_grasps[i]
                 RT = RT_obj @ RT_g
                 RT_grasps_base[i] = RT
+
+                # check if the grasp is in collision
+                RT_off = RT_grasps_base[i] @ pose_standoff
+                q_user_input = [0.05] * gripper_model.ndof
+                gripper_points, normals = gto_gripper_model.compute_fk_surface_points(q_user_input, tf_base=RT_off)
+                sdf = depth_pc.get_sdf(gripper_points)
+                ratio = np.sum(sdf < 0) / len(sdf)
+                print(f'grasp {i}, collision ratio {ratio}')
+                if ratio > 0.01:
+                    in_collision[i] = 1
+
+                # visualization
+                # colors = np.zeros(gripper_points.shape)
+                # colors[sdf < 0, 2] = 1
+                # colors[sdf > 0, 0] = 1
+                # cloud = pyrender.Mesh.from_points(gripper_points, colors=colors)
+                # scene = pyrender.Scene()
+                # scene.add(cloud)
+                # scene.add(pyrender.Mesh.from_points(depth_pc.points))
+                # pyrender.Viewer(scene, use_raymond_lighting=True, point_size=2)
+            
+            RT_grasps_base = RT_grasps_base[in_collision == 0] 
+            print('Among %d grasps, %d in collision, %d collision-free' % (n, np.sum(in_collision), RT_grasps_base.shape[0]))
 
             # visualize grasps
             vis = Visualizer(camera_position=[3, 0, 3])
@@ -361,7 +389,7 @@ if __name__ == '__main__':
             )                
 
             q = [0.05, 0.05]
-            for i in np.random.permutation(n)[:5]:
+            for i in np.random.permutation(RT_grasps_base.shape[0])[:5]:
                 RT_g = RT_grasps_base[i] @ pose_standoff
                 position = RT_g[:3, 3]
                 # scalar-last (x, y, z, w) format in optas
@@ -373,4 +401,6 @@ if __name__ == '__main__':
                     base_orientation=orientation,
                     q=q
                 )
+                
+
             vis.start()
