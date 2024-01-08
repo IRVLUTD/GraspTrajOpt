@@ -77,7 +77,7 @@ class GTORobotModel():
 
             points_base_all = np.concatenate((points_base_all, points_base), axis=1)
             normals_base_all = np.concatenate((normals_base_all, normals_base), axis=1)
-        return points_base_all.T, normals_base_all.T     
+        return points_base_all.T, normals_base_all.T
 
 
 if __name__ == "__main__":

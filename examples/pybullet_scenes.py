@@ -390,6 +390,7 @@ if __name__ == '__main__':
 
             q = [0.05, 0.05]
             for i in np.random.permutation(RT_grasps_base.shape[0])[:5]:
+                print(RT_grasps_base[i])
                 RT_g = RT_grasps_base[i] @ pose_standoff
                 position = RT_g[:3, 3]
                 # scalar-last (x, y, z, w) format in optas
