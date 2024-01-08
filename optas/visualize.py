@@ -1228,18 +1228,18 @@ class Visualizer:
         for i, alpha in enumerate(alphas):
             robot = self.robot(
                 robot_model,
-                Q[:, i],
-                alpha,
-                show_links,
-                link_axis_scale,
-                link_axis_linewidth,
-                link_center_rgb,
-                link_center_alpha,
-                link_center_radius,
-                display_link_names,
-                link_names_scale,
-                link_names_rgb,
-                link_names_alpha,
+                q=Q[:, i],
+                alpha=alpha,
+                show_links=show_links,
+                link_axis_scale=link_axis_scale,
+                link_axis_linewidth=link_axis_linewidth,
+                link_center_rgb=link_center_rgb,
+                link_center_alpha=link_center_alpha,
+                link_center_radius=link_center_radius,
+                display_link_names=display_link_names,
+                link_names_scale=link_names_scale,
+                link_names_rgb=link_names_rgb,
+                link_names_alpha=link_names_alpha,
             )
 
             if animate:
