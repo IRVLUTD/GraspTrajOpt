@@ -97,23 +97,46 @@ class GTORobotModel(RobotModel):
             points_base_all = np.concatenate((points_base_all, points_base), axis=1)
             normals_base_all = np.concatenate((normals_base_all, normals_base), axis=1)
         return points_base_all.T, normals_base_all.T
+    
+
+
+    def compute_workspace_field(self, arm_len, arm_height):
+        self.xlim = [0, arm_len]
+        self.ylim = [-arm_len, arm_len]
+        self.zlim = [0,arm_height + arm_len]
+
+        margin = 0.1
+        self.grid_resolution = 0.02
+        workspace_points = np.array(np.meshgrid(
+                                np.arange(self.xlim[0] - margin, self.xlim[1] + margin, self.grid_resolution),
+                                np.arange(self.ylim[0] - margin, self.ylim[1] + margin, self.grid_resolution),
+                                np.arange(self.zlim[0] - margin, self.zlim[1] + margin, self.grid_resolution),
+                                indexing='ij'))
+        self.workspace_points = workspace_points.reshape((3, -1)).T
+        print('computing workspace points', self.workspace_points.shape)  
 
 
 if __name__ == "__main__":
 
     collision_link_names = ["shoulder_pan_link", "shoulder_lift_link", "upperarm_roll_link",
                   "elbow_flex_link", "forearm_roll_link", "wrist_flex_link", "wrist_roll_link", "gripper_link",
-                  "l_gripper_finger_link", "r_gripper_finger_link"]    
+                  "l_gripper_finger_link", "r_gripper_finger_link"]
+    param_joints = ['r_wheel_joint', 'l_wheel_joint', 'torso_lift_joint', 'head_pan_joint', 'head_tilt_joint', 
+                    'r_gripper_finger_joint', 'l_gripper_finger_joint', 'bellows_joint']     
 
     model_dir = os.path.join(cwd, "../examples/robots", "fetch")
     urdf_filename = os.path.join(model_dir, "fetch.urdf")
-    robot_model = GTORobotModel(model_dir, urdf_filename=urdf_filename, collision_link_names=collision_link_names)
+    robot_model = GTORobotModel(model_dir, urdf_filename=urdf_filename, 
+                                param_joints=param_joints, collision_link_names=None)
+    robot_model.compute_workspace_field(arm_len=1.1, arm_height=1.1)
 
     # forward kinematics
     q_user_input = [0.0] * robot_model.ndof
+    q_user_input[2] = 0.4
     points_base_all, normals_base_all = robot_model.compute_fk_surface_points(q_user_input)
 
     # show points
     scene = pyrender.Scene()
     scene.add(pyrender.Mesh.from_points(points_base_all, normals=normals_base_all))
+    scene.add(pyrender.Mesh.from_points(robot_model.workspace_points))
     pyrender.Viewer(scene, use_raymond_lighting=True, point_size=2)

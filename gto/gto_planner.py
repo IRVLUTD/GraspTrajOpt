@@ -16,7 +16,7 @@ from utils import *
 
 
 class GTOPlanner:
-    def __init__(self, robot, link_ee, gripper_points, gripper_tf, depth_pc=None):
+    def __init__(self, robot, link_ee, link_gripper, depth_pc=None):
         
         # trajectory parameters
         self.T = 50  # no. time steps in trajectory
@@ -28,9 +28,9 @@ class GTOPlanner:
         self.robot = robot
         self.robot_name = robot.get_name()
         self.link_ee = link_ee
-        self.gripper_points = cs.DM(gripper_points)
-        self.gripper_tf = gripper_tf
-        self.gripper_q = [0.05, 0.05]
+        self.link_gripper = link_gripper
+        self.gripper_points = robot.surface_pc_map[link_gripper].points
+        self.gripper_tf = robot.get_link_transform_function(link=link_gripper, base_link=link_ee)
 
         # depth point cloud for obstacle avoidance
         self.depth_pc = depth_pc
@@ -46,7 +46,7 @@ class GTOPlanner:
         qc = builder.add_parameter(
             "qc", self.robot.ndof
         )  # current robot joint configuration
-        # goal pose of the gripper
+        # goal pose of the gripper link_ee
         tf_goal = builder.add_parameter("tf_goal", 4, 4)
 
         # Constraint: initial configuration
@@ -70,16 +70,15 @@ class GTOPlanner:
             self.robot_name
         )  # ndof-by-T symbolic array for robot trajectory
 
-        # forward kinematics
-        self.fk = self.robot.get_global_link_transform_function(self.link_ee, n=self.T)
+        # forward kinematics for link gripper
+        self.fk = self.robot.get_global_link_transform_function(self.link_gripper, n=self.T)
         # trajectory for end-effector (FK)
-        tf_ee = self.fk(Q)
+        tf_gripper = self.fk(Q)
 
         # Cost: reach goal pose
-        tf_T = tf_ee[self.T - 1]    # last time step pose
-        tf = tf_T @ self.gripper_tf(self.gripper_q)
+        tf = tf_gripper[self.T - 1]    # last time step pose
         points_tf = tf[:3, :3] @ self.gripper_points.T + tf[:3, 3].reshape((3, 1))
-        tf_gripper_goal = tf_goal @ self.gripper_tf(self.gripper_q)
+        tf_gripper_goal = tf_goal @ self.gripper_tf(Q[:, self.T - 1])
         points_tf_goal = tf_gripper_goal[:3, :3] @ self.gripper_points.T + tf_gripper_goal[:3, 3].reshape((3, 1))
         builder.add_cost_term("cost_pos", optas.sumsqr(points_tf - points_tf_goal))
 
@@ -98,8 +97,6 @@ class GTOPlanner:
                         points_base_all = optas.horzcat(points_base_all, point_base)
             points_base_all = points_base_all.T
             print(points_base_all.shape)
-            distances = self.depth_pc.sdf.get_distance(points_base_all)
-            sys.exit(1)
 
         # Cost: minimize joint velocity
         dQ = builder.get_robot_states_and_parameters(self.robot_name, time_deriv=1)
@@ -165,17 +162,11 @@ def main():
                         param_joints=param_joints,
                         collision_link_names=collision_link_names)
     link_ee = "wrist_roll_link"  # end-effector link name
+    link_gripper = 'gripper_link'
     print('optimized joint names:', robot.optimized_joint_names)
 
-    # load robot gripper model
-    urdf_filename = os.path.join(model_dir, "fetch_gripper.urdf")
-    gripper = GTORobotModel(model_dir, urdf_filename=urdf_filename)
-    link_gripper = 'gripper_link'
-    gripper_pc = gripper.surface_pc_map[link_gripper].points
-    gripper_tf = gripper.visual_tf[link_gripper]
-
     # Initialize planner
-    planner = GTOPlanner(robot, link_ee, gripper_pc, gripper_tf)
+    planner = GTOPlanner(robot, link_ee, link_gripper)
 
     # Plan trajectory
     qc = default_pose(robot)
@@ -192,6 +183,8 @@ def main():
     quat = mat2quat(RT[:3, :3])
     orientation = [quat[1], quat[2], quat[3], quat[0]]
     # gripper
+    urdf_filename = os.path.join(model_dir, "fetch_gripper.urdf")
+    gripper = GTORobotModel(model_dir, urdf_filename=urdf_filename)    
     vis.robot(
         gripper,
         base_position=position,
