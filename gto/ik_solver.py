@@ -1,6 +1,7 @@
 # Python standard lib
 import os
 import pathlib
+from xml.parsers.expat import model
 import numpy as np
 import _init_paths
 
@@ -15,13 +16,13 @@ from transforms3d.quaternions import mat2quat
 
 class IKSolver:
 
-    def __init__(self, robot, eff_link, points, gripper_tf):
+    def __init__(self, robot, link_ee, link_gripper):
         self.robot = robot
-        self.eff_link = eff_link
+        self.link_ee = link_ee
+        self.link_gripper = link_gripper
         self.robot_name = robot.get_name()
-        self.points = cs.DM(points)
-        self.gripper_tf = gripper_tf
-        self.gripper_q = [0.05, 0.05]
+        self.gripper_points = robot.surface_pc_map[link_gripper].points
+        self.gripper_tf = robot.get_link_transform_function(link=link_gripper, base_link=link_ee)
         self.setup_optimization()
 
 
@@ -30,26 +31,28 @@ class IKSolver:
         builder = optas.OptimizationBuilder(T=1, robots=[self.robot])
 
         # setup parameters
+        # tf goal is for link_ee
         tf_goal = builder.add_parameter("tf_goal", 4, 4)
 
         # get robot state variables
         q_T = builder.get_robot_states_and_parameters(self.robot_name)
 
-        # forward kinematics
-        self.fk = self.robot.get_global_link_transform_function(link=self.eff_link)
+        # forward kinematics for link_gripper
+        self.fk = self.robot.get_global_link_transform_function(link=self.link_gripper)
 
         # Setting optimization - cost term and constraints
-        tf = self.fk(q_T) @ self.gripper_tf(self.gripper_q)
-        points_tf = tf[:3, :3] @ self.points.T + tf[:3, 3].reshape((3, 1))
-        tf_gripper_goal = tf_goal @ self.gripper_tf(self.gripper_q)
-        points_tf_goal = tf_gripper_goal[:3, :3] @ self.points.T + tf_gripper_goal[:3, 3].reshape((3, 1))
+        tf = self.fk(q_T)
+        points_tf = tf[:3, :3] @ self.gripper_points.T + tf[:3, 3].reshape((3, 1))
+
+        tf_gripper_goal = tf_goal @ self.gripper_tf(q_T)
+        points_tf_goal = tf_gripper_goal[:3, :3] @ self.gripper_points.T + tf_gripper_goal[:3, 3].reshape((3, 1))
         builder.add_cost_term("cost_pos", optas.sumsqr(points_tf - points_tf_goal))
 
         # Constraint: joint position limits
         builder.enforce_model_limits(self.robot_name)  # joint limits extracted from URDF
 
         # setup solver
-        self.solver = optas.CasADiSolver(builder.build()).setup("ipopt")        
+        self.solver = optas.CasADiSolver(builder.build()).setup("ipopt")    
 
 
     def solve_ik(self, q_0, RT):
@@ -85,21 +88,14 @@ if __name__ == "__main__":
     param_joints = ['r_wheel_joint', 'l_wheel_joint', 'torso_lift_joint', 'head_pan_joint', 'head_tilt_joint', 
                     'r_gripper_finger_joint', 'l_gripper_finger_joint', 'bellows_joint']
 
-    robot = optas.RobotModel(urdf_filename=urdf_filename, param_joints=param_joints) 
+    robot = GTORobotModel(model_dir, urdf_filename=urdf_filename, param_joints=param_joints) 
     robot_name = robot.get_name()
     link_ee = "wrist_roll_link"  # end-effector link name
+    link_gripper = 'gripper_link'
     print('optimized joint names:', robot.optimized_joint_names)
 
-    # load robot gripper model
-    urdf_filename = os.path.join(model_dir, "fetch_gripper.urdf")
-    gripper_model = optas.RobotModel(urdf_filename=urdf_filename)
-    gto_robot_model = GTORobotModel(model_dir, gripper_model)
-    link_gripper = 'gripper_link'
-    gripper_pc = gto_robot_model.surface_pc_map[link_gripper].points
-    gripper_tf = gto_robot_model.visual_tf[link_gripper]
-
     # solve problem
-    ik_solver = IKSolver(robot, link_ee, gripper_pc, gripper_tf)
+    ik_solver = IKSolver(robot, link_ee, link_gripper)
     q_0 = np.zeros((robot.ndof, 1), dtype=np.float32)
     q_0[2, 0] = 0.38
     q_0[3, 0] = 0.009195
@@ -113,7 +109,7 @@ if __name__ == "__main__":
         print(f'joint {i} {robot.actuated_joint_names[i]}: {lo[i]} <= {q_solution[i]} <= {hi[i]}')
 
     # visualize grasps
-    vis = Visualizer(camera_position=[3, 0, 3])
+    vis = Visualizer(camera_position=[3, 2, 4])
     vis.grid_floor()      
 
     q = [0.05, 0.05]
@@ -122,6 +118,8 @@ if __name__ == "__main__":
     quat = mat2quat(RT[:3, :3])
     orientation = [quat[1], quat[2], quat[3], quat[0]]
     # gripper
+    urdf_filename = os.path.join(model_dir, "fetch_gripper.urdf")
+    gripper_model = GTORobotModel(model_dir, urdf_filename=urdf_filename)    
     vis.robot(
         gripper_model,
         base_position=position,

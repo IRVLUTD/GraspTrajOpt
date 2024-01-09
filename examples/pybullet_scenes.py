@@ -12,6 +12,7 @@ from mesh_to_sdf.depth_point_cloud import DepthPointCloud
 import optas
 from optas.visualize import Visualizer
 from gto.gto_models import GTORobotModel
+from gto.gto_planner import GTOPlanner
 from transforms3d.quaternions import mat2quat
 import pyrender
 
@@ -266,6 +267,9 @@ class SceneReplicaEnv():
         # move arm
         index = [5, 6, 7, 8, 9, 10, 11]
         joint_command[index] = [1.32, 0.7, 0.0, -2.0, 0.0, -0.57, 0.0]
+        # open gripper
+        joint_command[12] = 0.05
+        joint_command[13] = 0.05        
         return joint_command
     
 
@@ -300,12 +304,27 @@ if __name__ == '__main__':
     grasp_dir = os.path.join(args.data_dir, "grasp_data", "refined_grasps")
     scenes_path = os.path.join(args.data_dir, "final_scenes", "scene_data")    
 
-    # load robot gripper model
+    # load robot model
     robot_model_dir = os.path.join(cwd, "robots", "fetch")
+    urdf_filename = os.path.join(robot_model_dir, "fetch.urdf")  
+    param_joints = ['r_wheel_joint', 'l_wheel_joint', 'torso_lift_joint', 'head_pan_joint', 'head_tilt_joint', 
+                    'r_gripper_finger_joint', 'l_gripper_finger_joint', 'bellows_joint']
+    collision_link_names = ["shoulder_pan_link", "shoulder_lift_link", "upperarm_roll_link",
+                  "elbow_flex_link", "forearm_roll_link", "wrist_flex_link", "wrist_roll_link", "gripper_link",
+                  "l_gripper_finger_link", "r_gripper_finger_link"]      
+    robot = GTORobotModel(robot_model_dir,
+                          urdf_filename=urdf_filename, 
+                          time_derivs=[0, 1],  # i.e. joint position/velocity trajectory
+                          param_joints=param_joints,
+                          collision_link_names=collision_link_names)
+    link_ee = "wrist_roll_link"  # end-effector link name
+
+    # load robot gripper model
     urdf_filename = os.path.join(robot_model_dir, "fetch_gripper.urdf")
-    print(urdf_filename)
-    gripper_model = optas.RobotModel(urdf_filename=urdf_filename)
-    gto_gripper_model = GTORobotModel(robot_model_dir, gripper_model)
+    gripper_model = GTORobotModel(robot_model_dir, urdf_filename=urdf_filename)
+    link_gripper = 'gripper_link'
+    gripper_pc = gripper_model.surface_pc_map[link_gripper].points
+    gripper_tf = gripper_model.visual_tf[link_gripper]
 
     # create the table environment
     env = SceneReplicaEnv()
@@ -328,6 +347,10 @@ if __name__ == '__main__':
 
     # render image
     depth_pc = env.get_observation()
+
+    # Initialize planner
+    print('Initialize planner')
+    planner = GTOPlanner(robot, link_ee, gripper_pc, gripper_tf, depth_pc)    
 
     # define the standoff pose
     offset = -0.01
@@ -361,8 +384,9 @@ if __name__ == '__main__':
                 # check if the grasp is in collision
                 RT_off = RT_grasps_base[i] @ pose_standoff
                 q_user_input = [0.05] * gripper_model.ndof
-                gripper_points, normals = gto_gripper_model.compute_fk_surface_points(q_user_input, tf_base=RT_off)
+                gripper_points, normals = gripper_model.compute_fk_surface_points(q_user_input, tf_base=RT_off)
                 sdf = depth_pc.get_sdf(gripper_points)
+
                 ratio = np.sum(sdf < 0) / len(sdf)
                 print(f'grasp {i}, collision ratio {ratio}')
                 if ratio > 0.01:
@@ -381,27 +405,33 @@ if __name__ == '__main__':
             RT_grasps_base = RT_grasps_base[in_collision == 0] 
             print('Among %d grasps, %d in collision, %d collision-free' % (n, np.sum(in_collision), RT_grasps_base.shape[0]))
 
+            # plan to a grasp
+            RT = RT_grasps_base[0]
+            qc = env.robot.q()
+            plan = planner.plan(qc, RT)
+
             # visualize grasps
             vis = Visualizer(camera_position=[3, 0, 3])
             vis.grid_floor()
             vis.points(
                 depth_pc.points,
-            )                
-
-            q = [0.05, 0.05]
-            for i in np.random.permutation(RT_grasps_base.shape[0])[:5]:
-                print(RT_grasps_base[i])
-                RT_g = RT_grasps_base[i] @ pose_standoff
-                position = RT_g[:3, 3]
-                # scalar-last (x, y, z, w) format in optas
-                quat = mat2quat(RT_g[:3, :3])
-                orientation = [quat[1], quat[2], quat[3], quat[0]]
-                vis.robot(
-                    gripper_model,
-                    base_position=position,
-                    base_orientation=orientation,
-                    q=q
-                )
-                
-
+            )
+            q = [0, 0]
+            position = RT[:3, 3]
+            # scalar-last (x, y, z, w) format in optas
+            quat = mat2quat(RT[:3, :3])
+            orientation = [quat[1], quat[2], quat[3], quat[0]]
+            vis.robot(
+                gripper_model,
+                base_position=position,
+                base_orientation=orientation,
+                q=q
+            )
+            # robot trajectory
+            # sample plan
+            n = plan.shape[1]
+            index = list(range(0, n, 10))
+            if index[-1] != n - 1:
+                index += [n - 1]
+            vis.robot_traj(robot, plan[:, index], alpha_spec={'style': 'A'})
             vis.start()

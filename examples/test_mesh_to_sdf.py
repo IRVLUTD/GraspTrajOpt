@@ -16,13 +16,17 @@ if __name__ == "__main__":
     model_dir = os.path.join(cwd, "robots", "fetch")
     urdf_filename = os.path.join(model_dir, "fetch.urdf")
     robot_model = optas.RobotModel(urdf_filename=urdf_filename)
+
+    collision_link_names = ["shoulder_pan_link", "shoulder_lift_link", "upperarm_roll_link",
+                  "elbow_flex_link", "forearm_roll_link", "wrist_flex_link", "wrist_roll_link", "gripper_link",
+                  "l_gripper_finger_link", "r_gripper_finger_link"]
     
     # loop over all the links
     urdf = robot_model.get_urdf()
     surface_pc_map = {}
     for urdf_link in urdf.links:
         name = urdf_link.name
-        if urdf_link.visual is not None:
+        if urdf_link.visual is not None and name in collision_link_names:
             filename = os.path.join(model_dir, urdf_link.visual.geometry.filename)
             print(filename)
 

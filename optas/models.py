@@ -893,9 +893,13 @@ class RobotModel(Model):
         @param base_link Name of the base frame link.
         @return Homogeneous transform array.
         """
-        T_L_W = self.get_global_link_transform(link, q)
-        T_B_W = self.get_global_link_transform(base_link, q)
-        return T_L_W @ invt(T_B_W)
+        # T_L_W = self.get_global_link_transform(link, q)
+        # T_B_W = self.get_global_link_transform(base_link, q)
+        # return T_L_W @ invt(T_B_W)
+
+        T_W_L = self.get_global_link_transform(link, q)
+        T_W_B = self.get_global_link_transform(base_link, q)
+        return invt(T_W_B) @ T_W_L
 
     def get_link_transform_function(
         self,

@@ -3,6 +3,7 @@ import sys
 import pathlib
 import numpy as np
 import _init_paths
+import scipy
 
 # OpTaS
 import optas
@@ -14,8 +15,8 @@ from transforms3d.quaternions import mat2quat
 from utils import *
 
 
-class Planner:
-    def __init__(self, robot, link_ee, points, gripper_tf):
+class GTOPlanner:
+    def __init__(self, robot, link_ee, gripper_points, gripper_tf, depth_pc=None):
         
         # trajectory parameters
         self.T = 50  # no. time steps in trajectory
@@ -27,9 +28,12 @@ class Planner:
         self.robot = robot
         self.robot_name = robot.get_name()
         self.link_ee = link_ee
-        self.points = cs.DM(points)
+        self.gripper_points = cs.DM(gripper_points)
         self.gripper_tf = gripper_tf
         self.gripper_q = [0.05, 0.05]
+
+        # depth point cloud for obstacle avoidance
+        self.depth_pc = depth_pc
 
         self.setup_optimization()
 
@@ -74,10 +78,28 @@ class Planner:
         # Cost: reach goal pose
         tf_T = tf_ee[self.T - 1]    # last time step pose
         tf = tf_T @ self.gripper_tf(self.gripper_q)
-        points_tf = tf[:3, :3] @ self.points.T + tf[:3, 3].reshape((3, 1))
+        points_tf = tf[:3, :3] @ self.gripper_points.T + tf[:3, 3].reshape((3, 1))
         tf_gripper_goal = tf_goal @ self.gripper_tf(self.gripper_q)
-        points_tf_goal = tf_gripper_goal[:3, :3] @ self.points.T + tf_gripper_goal[:3, 3].reshape((3, 1))
+        points_tf_goal = tf_gripper_goal[:3, :3] @ self.gripper_points.T + tf_gripper_goal[:3, 3].reshape((3, 1))
         builder.add_cost_term("cost_pos", optas.sumsqr(points_tf - points_tf_goal))
+
+        # Cost: obstacle avoidance
+        if self.depth_pc is not None:
+            points_base_all = None            
+            for i in range(self.T):
+                q = Q[:, i]
+                for name in self.robot.surface_pc_map.keys():
+                    tf = self.robot.visual_tf[name](q)
+                    points = self.robot.surface_pc_map[name].points
+                    point_base = tf[:3, :3] @ points.T + tf[:3, 3].reshape((3, 1))
+                    if points_base_all == None:
+                        points_base_all = point_base
+                    else:
+                        points_base_all = optas.horzcat(points_base_all, point_base)
+            points_base_all = points_base_all.T
+            print(points_base_all.shape)
+            distances = self.depth_pc.sdf.get_distance(points_base_all)
+            sys.exit(1)
 
         # Cost: minimize joint velocity
         dQ = builder.get_robot_states_and_parameters(self.robot_name, time_deriv=1)
@@ -133,23 +155,27 @@ def main():
     # 'wrist_roll_joint', 'r_gripper_finger_joint', 'l_gripper_finger_joint', 'bellows_joint']
     param_joints = ['r_wheel_joint', 'l_wheel_joint', 'torso_lift_joint', 'head_pan_joint', 'head_tilt_joint', 
                     'r_gripper_finger_joint', 'l_gripper_finger_joint', 'bellows_joint']
+    
+    collision_link_names = ["shoulder_pan_link", "shoulder_lift_link", "upperarm_roll_link",
+                  "elbow_flex_link", "forearm_roll_link", "wrist_flex_link", "wrist_roll_link", "gripper_link",
+                  "l_gripper_finger_link", "r_gripper_finger_link"]    
 
-    robot = optas.RobotModel(urdf_filename=urdf_filename, 
-                             time_derivs=[0, 1],  # i.e. joint position/velocity trajectory
-                             param_joints=param_joints)
+    robot = GTORobotModel(model_dir, urdf_filename=urdf_filename, 
+                        time_derivs=[0, 1],  # i.e. joint position/velocity trajectory
+                        param_joints=param_joints,
+                        collision_link_names=collision_link_names)
     link_ee = "wrist_roll_link"  # end-effector link name
     print('optimized joint names:', robot.optimized_joint_names)
 
     # load robot gripper model
     urdf_filename = os.path.join(model_dir, "fetch_gripper.urdf")
-    gripper_model = optas.RobotModel(urdf_filename=urdf_filename)
-    gto_robot_model = GTORobotModel(model_dir, gripper_model)
+    gripper = GTORobotModel(model_dir, urdf_filename=urdf_filename)
     link_gripper = 'gripper_link'
-    gripper_pc = gto_robot_model.surface_pc_map[link_gripper].points
-    gripper_tf = gto_robot_model.visual_tf[link_gripper]
+    gripper_pc = gripper.surface_pc_map[link_gripper].points
+    gripper_tf = gripper.visual_tf[link_gripper]
 
     # Initialize planner
-    planner = Planner(robot, link_ee, gripper_pc, gripper_tf)
+    planner = GTOPlanner(robot, link_ee, gripper_pc, gripper_tf)
 
     # Plan trajectory
     qc = default_pose(robot)
@@ -167,13 +193,18 @@ def main():
     orientation = [quat[1], quat[2], quat[3], quat[0]]
     # gripper
     vis.robot(
-        gripper_model,
+        gripper,
         base_position=position,
         base_orientation=orientation,
         q=q
     )
-    # robot
-    vis.robot_traj(robot, plan, alpha_spec={'style': 'A'})
+    # robot trajectory
+    # sample plan
+    n = plan.shape[1]
+    index = list(range(0, n, 5))
+    if index[-1] != n - 1:
+        index += [n - 1]
+    vis.robot_traj(robot, plan[:, index], alpha_spec={'style': 'A'})
     vis.start()       
 
     return 0
