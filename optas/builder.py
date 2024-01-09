@@ -2,6 +2,7 @@
 
 import casadi as cs
 from .sx_container import SXContainer
+from .mx_container import MXContainer
 from .spatialmath import arrayify_args, ArrayType, CasADiArrayType
 from .optimization import *
 from .models import Model, TaskModel, RobotModel
@@ -65,26 +66,26 @@ class OptimizationBuilder:
 
         # Setup containers for decision variables, parameters, cost terms, ineq/eq constraints
 
-        ## SXContainer containing decision variables.
-        self._decision_variables = SXContainer()
+        ## MXContainer containing decision variables.
+        self._decision_variables = MXContainer()
 
-        ## SXContainer containing parameters.
-        self._parameters = SXContainer()
+        ## MXContainer containing parameters.
+        self._parameters = MXContainer()
 
-        ## SXContainer containing the cost terms.
-        self._cost_terms = SXContainer()
+        ## MXContainer containing the cost terms.
+        self._cost_terms = MXContainer()
 
-        ## SXContainer containing the linear equality constraints.
-        self._lin_eq_constraints = SXContainer()
+        ## MXContainer containing the linear equality constraints.
+        self._lin_eq_constraints = MXContainer()
 
-        ## SXContainer containing the linear inequality constraints.
-        self._lin_ineq_constraints = SXContainer()
+        ## MXContainer containing the linear inequality constraints.
+        self._lin_ineq_constraints = MXContainer()
 
-        ## SXContainer containing the inequality constraints.
-        self._ineq_constraints = SXContainer()
+        ## MXContainer containing the inequality constraints.
+        self._ineq_constraints = MXContainer()
 
-        ## SXContainer containing the equality constraints.
-        self._eq_constraints = SXContainer()
+        ## MXContainer containing the equality constraints.
+        self._eq_constraints = MXContainer()
 
         # Setup decision variables and parameters
         for model in self._models:
@@ -194,7 +195,7 @@ class OptimizationBuilder:
         states = self.get_model_states(name, time_deriv=time_deriv)
         parameters = self.get_model_parameters(name, time_deriv=time_deriv)
 
-        states_and_params = cs.SX.zeros(model.dim, max(1, self.T - time_deriv))
+        states_and_params = cs.MX.zeros(model.dim, max(1, self.T - time_deriv))
         for idx in range(model.num_param_joints):
             states_and_params[model.parameter_joint_indexes[idx], :] = parameters[
                 idx, :
@@ -217,7 +218,7 @@ class OptimizationBuilder:
         """
         return self._parameters.vec()
 
-    def _is_linear_in_x(self, y: cs.SX) -> cs.DM:
+    def _is_linear_in_x(self, y: cs.MX) -> cs.DM:
         """! Returns true DM(1) if y is a linear function of the decision variables, false DM(0) otherwise.
 
         @param y Symbolic function of interest.
@@ -245,7 +246,7 @@ class OptimizationBuilder:
 
     def add_decision_variables(
         self, name: str, m: int = 1, n: int = 1, is_discrete: bool = False
-    ) -> cs.SX:
+    ) -> cs.MX:
         """! Add decision variables to the optimization problem.
 
         @param name Name of decision variable array.
@@ -254,13 +255,13 @@ class OptimizationBuilder:
         @param is_discret If true, then the decision variables are treated as discrete variables. Default is False.
         @return Array of the decision variables.
         """
-        x = cs.SX.sym(name, m, n)
+        x = cs.MX.sym(name, m, n)
         self._decision_variables[name] = x
         if is_discrete:
             self._decision_variables.variable_is_discrete(name)
         return x
 
-    def add_parameter(self, name: str, m: int = 1, n: int = 1) -> cs.SX:
+    def add_parameter(self, name: str, m: int = 1, n: int = 1) -> cs.MX:
         """! Add a parameter to the optimization problem.
 
         @param name Name of parameter array.
@@ -268,12 +269,12 @@ class OptimizationBuilder:
         @param n Number of columns in parameter array. Default is 1.
         @return Array of the parameters.
         """
-        p = cs.SX.sym(name, m, n)
+        p = cs.MX.sym(name, m, n)
         self._parameters[name] = p
         return p
 
     @arrayify_args
-    def add_cost_term(self, name: str, cost_term: cs.SX) -> None:
+    def add_cost_term(self, name: str, cost_term: cs.MX) -> None:
         """! Add cost term to the optimization problem.
 
         @param name Name for cost function.
@@ -430,10 +431,10 @@ class OptimizationBuilder:
             """Returns an integration function where m is the state dimension,
             and n is the number of trajectory points.
             """
-            xd = cs.SX.sym("xd", dim)
-            x0 = cs.SX.sym("x0", dim)
-            x1 = cs.SX.sym("x1", dim)
-            dt = cs.SX.sym("dt")
+            xd = cs.MX.sym("xd", dim)
+            x0 = cs.MX.sym("x0", dim)
+            x1 = cs.MX.sym("x1", dim)
+            dt = cs.MX.sym("dt")
             integr = cs.Function("integr", [x0, x1, xd, dt], [x0 + dt * xd - x1])
             return integr.map(n)
 
@@ -442,7 +443,7 @@ class OptimizationBuilder:
         if isinstance(dt, (float, int)):
             dt = dt * cs.DM.ones(n)
 
-        if isinstance(dt, (cs.DM, cs.SX)):
+        if isinstance(dt, (cs.DM, cs.MX)):
             dt = cs.vec(dt)
             if dt.shape[0] == 1:
                 dt = dt * cs.DM.ones(n)

@@ -6,10 +6,10 @@ from casadi import sin, cos, vec
 from typing import List, Dict, Tuple, Union, Callable
 
 ## Accepted array types.
-ArrayType = Union[cs.DM, cs.SX, List[float], Tuple[float], cs.np.ndarray, float, int]
+ArrayType = Union[cs.DM, cs.SX, cs.MX, List[float], Tuple[float], cs.np.ndarray, float, int]
 
 ## CasADi array types typically returned by OpTaS methods.
-CasADiArrayType = Union[cs.DM, cs.SX]
+CasADiArrayType = Union[cs.DM, cs.SX, cs.MX]
 
 ## The number pi (i.e. 3.141...).
 pi = cs.np.pi

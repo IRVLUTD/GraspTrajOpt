@@ -317,14 +317,13 @@ if __name__ == '__main__':
                           time_derivs=[0, 1],  # i.e. joint position/velocity trajectory
                           param_joints=param_joints,
                           collision_link_names=collision_link_names)
+    robot.setup_workspace_field(arm_len=1.1, arm_height=1.1)
     link_ee = "wrist_roll_link"  # end-effector link name
+    link_gripper = 'gripper_link'
 
     # load robot gripper model
     urdf_filename = os.path.join(robot_model_dir, "fetch_gripper.urdf")
     gripper_model = GTORobotModel(robot_model_dir, urdf_filename=urdf_filename)
-    link_gripper = 'gripper_link'
-    gripper_pc = gripper_model.surface_pc_map[link_gripper].points
-    gripper_tf = gripper_model.visual_tf[link_gripper]
 
     # create the table environment
     env = SceneReplicaEnv()
@@ -345,12 +344,13 @@ if __name__ == '__main__':
         env.place_objects(filename, obj, position, orientation)
         print(obj, position, orientation)
 
-    # render image
+    # render image and compute sdf cost field
     depth_pc = env.get_observation()
+    sdf_cost = depth_pc.get_sdf_cost(robot.workspace_points, epsilon=0.02)
 
     # Initialize planner
     print('Initialize planner')
-    planner = GTOPlanner(robot, link_ee, gripper_pc, gripper_tf, depth_pc)    
+    planner = GTOPlanner(robot, link_ee, link_gripper)    
 
     # define the standoff pose
     offset = -0.01
@@ -408,7 +408,7 @@ if __name__ == '__main__':
             # plan to a grasp
             RT = RT_grasps_base[0]
             qc = env.robot.q()
-            plan = planner.plan(qc, RT)
+            plan = planner.plan(qc, RT, sdf_cost)
 
             # visualize grasps
             vis = Visualizer(camera_position=[3, 0, 3])

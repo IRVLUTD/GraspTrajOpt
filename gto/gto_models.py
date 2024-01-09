@@ -1,3 +1,4 @@
+import dis
 import os
 import _init_paths
 import mesh_to_sdf
@@ -99,21 +100,34 @@ class GTORobotModel(RobotModel):
         return points_base_all.T, normals_base_all.T
     
 
-
-    def compute_workspace_field(self, arm_len, arm_height):
+    def setup_workspace_field(self, arm_len, arm_height):
         self.xlim = [0, arm_len]
         self.ylim = [-arm_len, arm_len]
         self.zlim = [0,arm_height + arm_len]
 
-        margin = 0.1
+        self.field_margin = 0.2
         self.grid_resolution = 0.02
+        self.origin = np.array([self.xlim[0] - self.field_margin, self.ylim[0] - self.field_margin, self.zlim[0] - self.field_margin]).reshape((1, 3))
         workspace_points = np.array(np.meshgrid(
-                                np.arange(self.xlim[0] - margin, self.xlim[1] + margin, self.grid_resolution),
-                                np.arange(self.ylim[0] - margin, self.ylim[1] + margin, self.grid_resolution),
-                                np.arange(self.zlim[0] - margin, self.zlim[1] + margin, self.grid_resolution),
+                                np.arange(self.xlim[0] - self.field_margin, self.xlim[1] + self.field_margin, self.grid_resolution),
+                                np.arange(self.ylim[0] - self.field_margin, self.ylim[1] + self.field_margin, self.grid_resolution),
+                                np.arange(self.zlim[0] - self.field_margin, self.zlim[1] + self.field_margin, self.grid_resolution),
                                 indexing='ij'))
+        self.field_shape = workspace_points.shape[1:]
         self.workspace_points = workspace_points.reshape((3, -1)).T
-        print('computing workspace points', self.workspace_points.shape)  
+        self.field_size = self.workspace_points.shape[0]
+        print('workspace field', self.field_size)
+        print('workspace points', self.workspace_points.shape)
+
+
+    def points_to_offsets(self, points):
+        n = points.shape[0]
+        origin = np.repeat(self.origin, n, axis=0)
+        idxes = optas.floor((points - origin) / self.grid_resolution)
+        # offset = n_3 + N_3 * (n_2 + N_2 * n_1)
+        # https://eli.thegreenplace.net/2015/memory-layout-of-multi-dimensional-arrays
+        offsets = idxes[:, 2] + self.field_shape[2] * (idxes[:, 1] + self.field_shape[1] + idxes[:, 0])
+        return offsets
 
 
 if __name__ == "__main__":
@@ -128,7 +142,7 @@ if __name__ == "__main__":
     urdf_filename = os.path.join(model_dir, "fetch.urdf")
     robot_model = GTORobotModel(model_dir, urdf_filename=urdf_filename, 
                                 param_joints=param_joints, collision_link_names=None)
-    robot_model.compute_workspace_field(arm_len=1.1, arm_height=1.1)
+    robot_model.setup_workspace_field(arm_len=1.1, arm_height=1.1)
 
     # forward kinematics
     q_user_input = [0.0] * robot_model.ndof

@@ -16,7 +16,7 @@ from utils import *
 
 
 class GTOPlanner:
-    def __init__(self, robot, link_ee, link_gripper, depth_pc=None):
+    def __init__(self, robot, link_ee, link_gripper, collision_avoidance=True):
         
         # trajectory parameters
         self.T = 50  # no. time steps in trajectory
@@ -31,10 +31,7 @@ class GTOPlanner:
         self.link_gripper = link_gripper
         self.gripper_points = robot.surface_pc_map[link_gripper].points
         self.gripper_tf = robot.get_link_transform_function(link=link_gripper, base_link=link_ee)
-
-        # depth point cloud for obstacle avoidance
-        self.depth_pc = depth_pc
-
+        self.collision_avoidance = collision_avoidance
         self.setup_optimization()
 
 
@@ -48,6 +45,8 @@ class GTOPlanner:
         )  # current robot joint configuration
         # goal pose of the gripper link_ee
         tf_goal = builder.add_parameter("tf_goal", 4, 4)
+        # sdf field
+        sdf_cost = builder.add_parameter("sdf_cost", self.robot.field_size)
 
         # Constraint: initial configuration
         builder.initial_configuration(
@@ -83,7 +82,7 @@ class GTOPlanner:
         builder.add_cost_term("cost_pos", optas.sumsqr(points_tf - points_tf_goal))
 
         # Cost: obstacle avoidance
-        if self.depth_pc is not None:
+        if self.collision_avoidance:
             points_base_all = None            
             for i in range(self.T):
                 q = Q[:, i]
@@ -96,7 +95,8 @@ class GTOPlanner:
                     else:
                         points_base_all = optas.horzcat(points_base_all, point_base)
             points_base_all = points_base_all.T
-            print(points_base_all.shape)
+            offsets = self.robot.points_to_offsets(points_base_all)
+            builder.add_cost_term("cost_sdf", optas.sumsqr(sdf_cost[offsets]))
 
         # Cost: minimize joint velocity
         dQ = builder.get_robot_states_and_parameters(self.robot_name, time_deriv=1)
@@ -109,7 +109,7 @@ class GTOPlanner:
         self.solver = optas.CasADiSolver(builder.build()).setup("ipopt")
 
 
-    def plan(self, qc, RT):
+    def plan(self, qc, RT, sdf_cost):
         # Set initial seed, note joint velocity will be set to zero
         Q0 = optas.diag(qc) @ optas.DM.ones(self.robot.ndof, self.T)
 
@@ -122,6 +122,7 @@ class GTOPlanner:
             {
                 "qc": optas.DM(qc),
                 "tf_goal": optas.DM(RT),
+                "sdf_cost": optas.DM(sdf_cost),
                 f"{self.robot_name}/q/p": self.robot.extract_parameter_dimensions(Q0),
             }
         )
@@ -161,6 +162,7 @@ def main():
                         time_derivs=[0, 1],  # i.e. joint position/velocity trajectory
                         param_joints=param_joints,
                         collision_link_names=collision_link_names)
+    robot.setup_workspace_field(arm_len=1.1, arm_height=1.1)    
     link_ee = "wrist_roll_link"  # end-effector link name
     link_gripper = 'gripper_link'
     print('optimized joint names:', robot.optimized_joint_names)
@@ -169,8 +171,9 @@ def main():
     planner = GTOPlanner(robot, link_ee, link_gripper)
 
     # Plan trajectory
+    sdf_cost = np.zeros(robot.field_size)
     qc = default_pose(robot)
-    plan = planner.plan(qc, RT)
+    plan = planner.plan(qc, RT, sdf_cost)
     print(plan.shape)
 
     # visualization
