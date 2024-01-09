@@ -103,7 +103,7 @@ class GTORobotModel(RobotModel):
     def setup_workspace_field(self, arm_len, arm_height):
         self.xlim = [0, arm_len]
         self.ylim = [-arm_len, arm_len]
-        self.zlim = [0,arm_height + arm_len]
+        self.zlim = [0, arm_height + arm_len]
 
         self.field_margin = 0.2
         self.grid_resolution = 0.02

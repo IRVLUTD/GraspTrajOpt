@@ -56,6 +56,9 @@ class GTOPlanner:
         builder.initial_configuration(
             self.robot_name, time_deriv=1
         )  # initial joint vel is zero
+        builder.fix_configuration(
+            self.robot_name, time_deriv=1, t=-1,
+        )  # end joint vel is zero
 
         # Constraint: dynamics
         builder.integrate_model_states(
@@ -197,7 +200,7 @@ def main():
     # robot trajectory
     # sample plan
     n = plan.shape[1]
-    index = list(range(0, n, 5))
+    index = list(range(0, n, 10))
     if index[-1] != n - 1:
         index += [n - 1]
     vis.robot_traj(robot, plan[:, index], alpha_spec={'style': 'A'})
