@@ -37,11 +37,11 @@ class IKSolver:
         # get robot state variables
         q_T = builder.get_robot_states_and_parameters(self.robot_name)
 
-        # forward kinematics for link_gripper
-        self.fk = self.robot.get_global_link_transform_function(link=self.link_gripper)
+        # forward kinematics for link_ee
+        self.fk = self.robot.get_global_link_transform_function(link=self.link_ee)
 
         # Setting optimization - cost term and constraints
-        tf = self.fk(q_T)
+        tf = self.fk(q_T) @ self.gripper_tf(q_T)
         points_tf = tf[:3, :3] @ self.gripper_points.T + tf[:3, 3].reshape((3, 1))
 
         tf_gripper_goal = tf_goal @ self.gripper_tf(q_T)
@@ -59,14 +59,22 @@ class IKSolver:
         self.solver.reset_initial_seed({f"{self.robot_name}/q/x": self.robot.extract_optimized_dimensions(q_0)})
         self.solver.reset_parameters({f"{self.robot_name}/q/p": self.robot.extract_parameter_dimensions(q_0), 
                                         "tf_goal": RT}) 
-        solution = self.solver.solve()               
+        solution = self.solver.solve()
+        q = solution[f"{self.robot_name}/q"]
 
-        print("***********************************")
-        print(self.solver._p_dict)         
+        # compute errors
+        tf = self.fk(solution[f"{robot_name}/q"]).toarray()
+        err_pos = np.linalg.norm(RT[:3, 3] - tf[:3, 3])
+        quat1 = mat2quat(RT[:3, :3])
+        quat2 = mat2quat(tf[:3, :3])
+        err_rot = np.arccos(2 * np.square(np.dot(quat1, quat2)) - 1) * 180 / np.pi
+
+        print("***********************************") 
         print("Casadi IK solution:")
-        print(solution[f"{robot_name}/q"])
-        print(self.fk(solution[f"{robot_name}/q"]))
-        return solution[f"{self.robot_name}/q"]
+        print(q)
+        print('position error', err_pos)
+        print('rotation error in degree', err_rot)
+        return q, err_pos, err_rot
 
 
 
@@ -102,7 +110,7 @@ if __name__ == "__main__":
     q_0[4, 0] = 0.908270
     q_0[12, 0] = 0.05
     q_0[13, 0] = 0.05
-    q_solution = ik_solver.solve_ik(q_0, RT)
+    q_solution, err_pos, err_rot = ik_solver.solve_ik(q_0, RT)
     lo = robot.lower_actuated_joint_limits.toarray()
     hi = robot.upper_actuated_joint_limits.toarray()
     for i in range(robot.ndof):
