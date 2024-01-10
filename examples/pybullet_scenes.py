@@ -410,8 +410,7 @@ if __name__ == '__main__':
             qc = env.robot.q()
             # RT = RT_grasps_base[0]
             # plan = planner.plan(qc, RT, sdf_cost)
-            plan, index = planner.plan_goalset(qc, RT_grasps_base, sdf_cost)
-            RT = RT_grasps_base[index]
+            plan = planner.plan_goalset(qc, RT_grasps_base, sdf_cost)
 
             # visualize grasps
             vis = Visualizer(camera_position=[3, 0, 3])
@@ -419,17 +418,17 @@ if __name__ == '__main__':
             vis.points(
                 depth_pc.points,
             )
-            q = [0, 0]
-            position = RT[:3, 3]
-            # scalar-last (x, y, z, w) format in optas
-            quat = mat2quat(RT[:3, :3])
-            orientation = [quat[1], quat[2], quat[3], quat[0]]
-            vis.robot(
-                gripper_model,
-                base_position=position,
-                base_orientation=orientation,
-                q=q
-            )
+            # q = [0, 0]
+            # position = RT[:3, 3]
+            # # scalar-last (x, y, z, w) format in optas
+            # quat = mat2quat(RT[:3, :3])
+            # orientation = [quat[1], quat[2], quat[3], quat[0]]
+            # vis.robot(
+            #     gripper_model,
+            #     base_position=position,
+            #     base_orientation=orientation,
+            #     q=q
+            # )
             # robot trajectory
             # sample plan
             n = plan.shape[1]

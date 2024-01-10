@@ -12,6 +12,7 @@ import casadi as cs
 from optas.visualize import Visualizer
 from gto.gto_models import GTORobotModel
 from transforms3d.quaternions import mat2quat
+from optas.spatialmath import Quaternion
 from utils import *
 
 
@@ -32,10 +33,9 @@ class GTOPlanner:
         self.gripper_points = robot.surface_pc_map[link_gripper].points
         self.gripper_tf = robot.get_link_transform_function(link=link_gripper, base_link=link_ee)
         self.collision_avoidance = collision_avoidance
-        self.setup_optimization()
 
 
-    def setup_optimization(self):
+    def setup_optimization(self, goal_size=1):
         # Setup optimization builder
         builder = optas.OptimizationBuilder(T=self.T, robots=[self.robot])
 
@@ -44,7 +44,7 @@ class GTOPlanner:
             "qc", self.robot.ndof
         )  # current robot joint configuration
         # goal pose of the gripper link_ee
-        tf_goal = builder.add_parameter("tf_goal", 4, 4)
+        tf_goal = builder.add_parameter("tf_goal", 7, goal_size)
         # sdf field
         sdf_cost = builder.add_parameter("sdf_cost", self.robot.field_size)
 
@@ -80,9 +80,14 @@ class GTOPlanner:
         # Cost: reach goal pose
         tf = tf_gripper[self.T - 1]    # last time step pose
         points_tf = tf[:3, :3] @ self.gripper_points.T + tf[:3, 3].reshape((3, 1))
-        tf_gripper_goal = tf_goal @ self.gripper_tf(Q[:, self.T - 1])
-        points_tf_goal = tf_gripper_goal[:3, :3] @ self.gripper_points.T + tf_gripper_goal[:3, 3].reshape((3, 1))
-        builder.add_cost_term("cost_pos", optas.sumsqr(points_tf - points_tf_goal))
+        cost = cs.MX.zeros(goal_size)
+        for i in range(goal_size):
+            quat = Quaternion(tf_goal[3, i], tf_goal[4, i], tf_goal[5, i], tf_goal[6, i])
+            tf_g = quat.getT(tf_goal[0, i], tf_goal[1, i], tf_goal[2, i])
+            tf_gripper_goal = tf_g @ self.gripper_tf(Q[:, self.T - 1])
+            points_tf_goal = tf_gripper_goal[:3, :3] @ self.gripper_points.T + tf_gripper_goal[:3, 3].reshape((3, 1))
+            cost[i] = optas.sumsqr(points_tf - points_tf_goal)
+        builder.add_cost_term("cost_pos", optas.mmin(cost))
 
         # Cost: obstacle avoidance
         if self.collision_avoidance:
@@ -109,11 +114,18 @@ class GTOPlanner:
         builder.enforce_model_limits(self.robot_name)  # joint limits extracted from URDF        
 
         # Setup solver
-        solver_options = {'ipopt': {'max_iter': 100}}
+        solver_options = {'ipopt': {'max_iter': 200}}
         self.solver = optas.CasADiSolver(builder.build()).setup("ipopt", solver_options=solver_options)
 
 
     def plan(self, qc, RT, sdf_cost):
+        self.setup_optimization()
+        tf_goal = np.zeros((7, 1))
+        quat = mat2quat(RT[:3, :3])
+        orientation = [quat[1], quat[2], quat[3], quat[0]]
+        tf_goal[:3, 0] = RT[:3, 3]
+        tf_goal[3:, 0] = orientation
+
         # Set initial seed, note joint velocity will be set to zero
         Q0 = optas.diag(qc) @ optas.DM.ones(self.robot.ndof, self.T)
 
@@ -125,7 +137,7 @@ class GTOPlanner:
         self.solver.reset_parameters(
             {
                 "qc": optas.DM(qc),
-                "tf_goal": optas.DM(RT),
+                "tf_goal": optas.DM(tf_goal),
                 "sdf_cost": optas.DM(sdf_cost),
                 f"{self.robot_name}/q/p": self.robot.extract_parameter_dimensions(Q0),
             }
@@ -142,47 +154,38 @@ class GTOPlanner:
     def plan_goalset(self, qc, RTs, sdf_cost):
 
         n = RTs.shape[0]
-        costs = np.zeros((n, ))
-        Q0 = optas.diag(qc) @ optas.DM.ones(self.robot.ndof, self.T)
-        Qs = []
-        # plan to each goal
+        self.setup_optimization(goal_size=n)
+        tf_goal = np.zeros((7, n))
         for i in range(n):
-            print(f'plan to goal {i}')
-
-            # Set initial seed, note joint velocity will be set to zero
-            self.solver.reset_initial_seed(
-                {f"{self.robot_name}/q/x": self.robot.extract_optimized_dimensions(Q0)}
-            )
-
-            # Set parameters
             RT = RTs[i]
-            print(RT)
-            self.solver.reset_parameters(
-                {
-                    "qc": optas.DM(qc),
-                    "tf_goal": optas.DM(RT),
-                    "sdf_cost": optas.DM(sdf_cost),
-                    f"{self.robot_name}/q/p": self.robot.extract_parameter_dimensions(Q0),
-                }
-            )
+            quat = mat2quat(RT[:3, :3])
+            orientation = [quat[1], quat[2], quat[3], quat[0]]
+            tf_goal[:3, i] = RT[:3, 3]
+            tf_goal[3:, i] = orientation        
 
-            # Solve problem
-            solution = self.solver.solve()
+        Q0 = optas.diag(qc) @ optas.DM.ones(self.robot.ndof, self.T)
 
-            # Get robot configuration
-            Q = solution[f"{self.robot_name}/q"]
-            costs[i] = solution['f']
-            Qs.append(Q.toarray().copy())
-            print(f'cost {costs[i]}')
+        # Set initial seed, note joint velocity will be set to zero
+        self.solver.reset_initial_seed(
+            {f"{self.robot_name}/q/x": self.robot.extract_optimized_dimensions(Q0)}
+        )
 
-            # start from the previous solution
-            Q0 = Q
+        # Set parameters
+        self.solver.reset_parameters(
+            {
+                "qc": optas.DM(qc),
+                "tf_goal": optas.DM(tf_goal),
+                "sdf_cost": optas.DM(sdf_cost),
+                f"{self.robot_name}/q/p": self.robot.extract_parameter_dimensions(Q0),
+            }
+        )
 
-        # use the solution with the minimum cost
-        print('All costs', costs)
-        index = np.argmin(costs)
-        Q = Qs[index]
-        return Q, index
+        # Solve problem
+        solution = self.solver.solve()
+
+        # Get robot configuration
+        Q = solution[f"{self.robot_name}/q"]
+        return Q.toarray()
 
 
 def main():
@@ -192,7 +195,7 @@ def main():
     RT = np.array([[-0.05241979, -0.45344928, -0.88973933,  0.41363978],
         [-0.27383122, -0.8502871,   0.44947574,  0.12551154],
         [-0.96034825,  0.26719978, -0.07959669,  0.97476065],
-        [ 0.,          0.,          0.,          1.        ]])  
+        [ 0.,          0.,          0.,          1.        ]])
 
     # Setup robot
     model_dir = os.path.join(cwd, "../examples/robots", "fetch")

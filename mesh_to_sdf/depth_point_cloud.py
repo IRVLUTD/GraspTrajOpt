@@ -60,7 +60,7 @@ class DepthPointCloud:
         return distances
     
     
-    def get_sdf_cost(self, query_points, epsilon=0.02):
+    def get_sdf_cost(self, query_points, epsilon=0.05):
         print('computing sdf cost...')
         distances, indices = self.kd_tree.query(query_points)
         distances = distances.astype(np.float32).reshape(-1)
