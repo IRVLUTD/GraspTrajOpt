@@ -344,10 +344,6 @@ if __name__ == '__main__':
         env.place_objects(filename, obj, position, orientation)
         print(obj, position, orientation)
 
-    # render image and compute sdf cost field
-    depth_pc = env.get_observation()
-    sdf_cost = depth_pc.get_sdf_cost(robot.workspace_points, epsilon=0.02)
-
     # Initialize planner
     print('Initialize planner')
     planner = GTOPlanner(robot, link_ee, link_gripper)    
@@ -362,6 +358,11 @@ if __name__ == '__main__':
         object_order = meta[ordering][0].split(",")
         # for each object
         for object_name in object_order:
+                                          
+            # render image and compute sdf cost field
+            depth_pc = env.get_observation()
+            sdf_cost = depth_pc.get_sdf_cost(robot.workspace_points, epsilon=0.02)
+
             # load grasps
             grasp_file = os.path.join(grasp_dir, f"fetch_gripper-{object_name}.json")
             RT_grasps = parse_grasps(grasp_file)
@@ -406,9 +407,11 @@ if __name__ == '__main__':
             print('Among %d grasps, %d in collision, %d collision-free' % (n, np.sum(in_collision), RT_grasps_base.shape[0]))
 
             # plan to a grasp
-            RT = RT_grasps_base[0]
             qc = env.robot.q()
-            plan = planner.plan(qc, RT, sdf_cost)
+            # RT = RT_grasps_base[0]
+            # plan = planner.plan(qc, RT, sdf_cost)
+            plan, index = planner.plan_goalset(qc, RT_grasps_base, sdf_cost)
+            RT = RT_grasps_base[index]
 
             # visualize grasps
             vis = Visualizer(camera_position=[3, 0, 3])

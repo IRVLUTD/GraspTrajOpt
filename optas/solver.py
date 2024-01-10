@@ -128,7 +128,9 @@ class Solver(ABC):
 
         @return A dictionary containing the solution.
         """
-        solution = self.opt.decision_variables.vec2dict(self._solve())
+        x, f = self._solve()
+        solution = self.opt.decision_variables.vec2dict(x)
+        solution['f'] = f
 
         if self._error_on_fail and (not self.did_solve()):
             raise RuntimeError("Solver failed!")
@@ -395,7 +397,7 @@ class CasADiSolver(Solver):
         self._solution = self._solver(**solver_input)
         self._stats = self._solver.stats()
         self._stats["solution"] = self._solution
-        return self._solution["x"]
+        return self._solution["x"], self._solution["f"]
 
     def stats(self) -> Dict:
         """! Statistics relating to the previous call to solve.
@@ -483,7 +485,7 @@ class OSQPSolver(Solver):
         # Solve problem
         self._solution = self.m.solve()
 
-        return self._solution.x
+        return self._solution.x, self._solution.f
 
     def stats(self):
         """! Statistics for the solution given by OSQP.
@@ -556,7 +558,7 @@ class CVXOPTSolver(Solver):
         @return The solution of the optimization problem.
         """
         self._solution = cvxopt.solvers.qp(**self._solver_input)
-        return self._solution["x"]
+        return self._solution["x"], self._solution["f"]
 
     def stats(self):
         """! Statistics relating to the previous call to solve.
@@ -789,7 +791,7 @@ class ScipyMinimizeSolver(Solver):
         @return The solution of the optimization problem.
         """
         self._solution = minimize(**self.minimize_input)
-        return self._solution.x
+        return self._solution.x, self._solution.f
 
     def stats(self):
         """! Statistics relating to the previous call to solve.

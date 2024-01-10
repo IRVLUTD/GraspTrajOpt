@@ -1,6 +1,6 @@
 import casadi as cs
 from .models import Model
-from .sx_container import SXContainer
+from .mx_container import MXContainer
 from .spatialmath import CasADiArrayType
 from typing import List, Tuple
 
@@ -59,15 +59,15 @@ class Optimization:
 
     def __init__(
         self,
-        decision_variables: SXContainer,
-        parameters: SXContainer,
-        cost_terms: SXContainer,
+        decision_variables: MXContainer,
+        parameters: MXContainer,
+        cost_terms: MXContainer,
     ):
         """! Initializer for the Optimization class.
 
-        @param decision_variables SXContainer containing decision variables.
-        @param parameters SXContainer containing parameters.
-        @param cost_terms SXContainer containing cost terms.
+        @param decision_variables MXContainer containing decision variables.
+        @param parameters MXContainer containing parameters.
+        @param cost_terms MXContainer containing cost terms.
         @return Instance of the Optimization class.
         """
         # Set class attributes
@@ -75,25 +75,25 @@ class Optimization:
         ## A list of the task and robot models (set during build method in the OptimizationBuilder class)
         self.models = None
 
-        ## SXContainer containing decision variables.
+        ## MXContainer containing decision variables.
         self.decision_variables = decision_variables
 
-        ## SXContainer containing parameters.
+        ## MXContainer containing parameters.
         self.parameters = parameters
 
-        ## SXContainer containing cost terms.
+        ## MXContainer containing cost terms.
         self.cost_terms = cost_terms
 
-        ## SXContainer containing linear equality constraints.
+        ## MXContainer containing linear equality constraints.
         self.lin_eq_constraints = {}
 
-        ## SXContainer containing linear inequality constraints.
+        ## MXContainer containing linear inequality constraints.
         self.lin_ineq_constraints = {}
 
-        ## SXContainer containing equality constraints.
+        ## MXContainer containing equality constraints.
         self.eq_constraints = {}
 
-        ## SXContainer containing inequality constraints.
+        ## MXContainer containing inequality constraints.
         self.ineq_constraints = {}
 
         ## CasADi function that evaluates the P term in the cost function (note, this only applies to problems with a quadratic cost function).
@@ -227,8 +227,8 @@ class Optimization:
     ) -> None:
         """! Setup the constraints k(x, p) = M(p).x + c(p) >= 0, and a(x, p) = A(p).x + b(p) == 0.
 
-        @param lin_ineq_constraints SXContainer containing the linear inequality constraints.
-        @param lin_eq_constraints SXContainer containing the linear equality constraints.
+        @param lin_ineq_constraints MXContainer containing the linear inequality constraints.
+        @param lin_eq_constraints MXContainer containing the linear equality constraints.
         """
 
         self.lin_ineq_constraints = lin_ineq_constraints
@@ -260,12 +260,12 @@ class Optimization:
         self.b = cs.Function("b", [self.p], [self.a(x_zero, self.p)])
 
     def specify_nonlinear_constraints(
-        self, ineq_constraints: SXContainer, eq_constraints: SXContainer
+        self, ineq_constraints: MXContainer, eq_constraints: MXContainer
     ) -> None:
         """! Setup the constraints g(x, p) >= 0, and h(x, p) == 0.
 
-        @param ineq_constraints SXContainer containing the inequality constraints.
-        @param eq_constraints SXContainer containing the equality constraints.
+        @param ineq_constraints MXContainer containing the inequality constraints.
+        @param eq_constraints MXContainer containing the equality constraints.
         """
 
         self.ineq_constraints = ineq_constraints
@@ -320,15 +320,15 @@ class QuadraticCostUnconstrained(Optimization):
 
     def __init__(
         self,
-        decision_variables: SXContainer,  # SXContainer for decision variables
-        parameters: SXContainer,  # SXContainer for parameters
-        cost_terms: SXContainer,  # SXContainer for cost terms
+        decision_variables: MXContainer,  # MXContainer for decision variables
+        parameters: MXContainer,  # MXContainer for parameters
+        cost_terms: MXContainer,  # MXContainer for cost terms
     ):
         """! Initializer for the QuadraticCostUnconstrained class.
 
-        @param decision_variables SXContainer containing decision variables.
-        @param parameters SXContainer containing parameters.
-        @param cost_terms SXContainer containing cost terms (must be quadratic).
+        @param decision_variables MXContainer containing decision variables.
+        @param parameters MXContainer containing parameters.
+        @param cost_terms MXContainer containing cost terms (must be quadratic).
         @return Instance of the QuadraticCostUnconstrained class.
         """
         super().__init__(decision_variables, parameters, cost_terms)
@@ -351,19 +351,19 @@ class QuadraticCostLinearConstraints(Optimization):
 
     def __init__(
         self,
-        decision_variables: SXContainer,  # SXContainer for decision variables
-        parameters: SXContainer,  # SXContainer for parameters
-        cost_terms: SXContainer,  # SXContainer for cost terms
-        lin_eq_constraints: SXContainer,  # SXContainer for linear equality constraints
-        lin_ineq_constraints: SXContainer,  # SXContainer for linear inequality constraints
+        decision_variables: MXContainer,  # MXContainer for decision variables
+        parameters: MXContainer,  # MXContainer for parameters
+        cost_terms: MXContainer,  # MXContainer for cost terms
+        lin_eq_constraints: MXContainer,  # MXContainer for linear equality constraints
+        lin_ineq_constraints: MXContainer,  # MXContainer for linear inequality constraints
     ):
         """! Initializer for the QuadraticCostLinearConstraints class.
 
-        @param decision_variables SXContainer containing decision variables.
-        @param parameters SXContainer containing parameters.
-        @param cost_terms SXContainer containing cost terms (must be quadratic).
-        @param lin_eq_constraints SXContainer containing the linear equality constraints.
-        @param lin_ineq_constraints SXContainer containing the linear inequality constraints.
+        @param decision_variables MXContainer containing decision variables.
+        @param parameters MXContainer containing parameters.
+        @param cost_terms MXContainer containing cost terms (must be quadratic).
+        @param lin_eq_constraints MXContainer containing the linear equality constraints.
+        @param lin_ineq_constraints MXContainer containing the linear inequality constraints.
         @return Instance of the QuadraticCostLinearConstraints class.
         """
         super().__init__(decision_variables, parameters, cost_terms)
@@ -392,23 +392,23 @@ class QuadraticCostNonlinearConstraints(Optimization):
 
     def __init__(
         self,
-        decision_variables: SXContainer,  # SXContainer for decision variables
-        parameters: SXContainer,  # SXContainer for parameters
-        cost_terms: SXContainer,  # SXContainer for cost terms
-        lin_eq_constraints: SXContainer,  # SXContainer for linear equality constraints
-        lin_ineq_constraints: SXContainer,  # SXContainer for linear inequality constraints
-        eq_constraints: SXContainer,  # SXContainer for equality constraints
-        ineq_constraints: SXContainer,  # SXContainer for inequality constraints
+        decision_variables: MXContainer,  # MXContainer for decision variables
+        parameters: MXContainer,  # MXContainer for parameters
+        cost_terms: MXContainer,  # MXContainer for cost terms
+        lin_eq_constraints: MXContainer,  # MXContainer for linear equality constraints
+        lin_ineq_constraints: MXContainer,  # MXContainer for linear inequality constraints
+        eq_constraints: MXContainer,  # MXContainer for equality constraints
+        ineq_constraints: MXContainer,  # MXContainer for inequality constraints
     ):
         """! Initializer for the QuadraticCostNonlinearConstraints class.
 
-        @param decision_variables SXContainer containing decision variables.
-        @param parameters SXContainer containing parameters.
-        @param cost_terms SXContainer containing cost terms (must be quadratic).
-        @param lin_eq_constraints SXContainer containing the linear equality constraints.
-        @param lin_ineq_constraints SXContainer containing the linear inequality constraints.
-        @param eq_constraints SXContainer containing the equality constraints.
-        @param ineq_constraints SXContainer containing the inequality constraints.
+        @param decision_variables MXContainer containing decision variables.
+        @param parameters MXContainer containing parameters.
+        @param cost_terms MXContainer containing cost terms (must be quadratic).
+        @param lin_eq_constraints MXContainer containing the linear equality constraints.
+        @param lin_ineq_constraints MXContainer containing the linear inequality constraints.
+        @param eq_constraints MXContainer containing the equality constraints.
+        @param ineq_constraints MXContainer containing the inequality constraints.
         @return Instance of the QuadraticCostNonlinearConstraints class.
         """
         super().__init__(decision_variables, parameters, cost_terms)
@@ -430,15 +430,15 @@ class NonlinearCostUnconstrained(Optimization):
 
     def __init__(
         self,
-        decision_variables: SXContainer,
-        parameters: SXContainer,
-        cost_terms: SXContainer,
+        decision_variables: MXContainer,
+        parameters: MXContainer,
+        cost_terms: MXContainer,
     ):
         """! Initializer for the NonlinearCostUnconstrained class.
 
-        @param decision_variables SXContainer containing decision variables.
-        @param parameters SXContainer containing parameters.
-        @param cost_terms SXContainer containing cost terms.
+        @param decision_variables MXContainer containing decision variables.
+        @param parameters MXContainer containing parameters.
+        @param cost_terms MXContainer containing cost terms.
         @return Instance of the NonlinearCostUnconstrained class.
         """
         super().__init__(decision_variables, parameters, cost_terms)
@@ -466,19 +466,19 @@ class NonlinearCostLinearConstraints(Optimization):
 
     def __init__(
         self,
-        decision_variables: SXContainer,  # SXContainer for decision variables
-        parameters: SXContainer,  # SXContainer for parameters
-        cost_terms: SXContainer,  # SXContainer for cost terms
-        lin_eq_constraints: SXContainer,  # SXContainer for linear equality constraints
-        lin_ineq_constraints: SXContainer,  # SXContainer for linear inequality constraints
+        decision_variables: MXContainer,  # MXContainer for decision variables
+        parameters: MXContainer,  # MXContainer for parameters
+        cost_terms: MXContainer,  # MXContainer for cost terms
+        lin_eq_constraints: MXContainer,  # MXContainer for linear equality constraints
+        lin_ineq_constraints: MXContainer,  # MXContainer for linear inequality constraints
     ):
         """! Initializer for the NonlinearCostLinearConstraints class.
 
-        @param decision_variables SXContainer containing decision variables.
-        @param parameters SXContainer containing parameters.
-        @param cost_terms SXContainer containing cost terms.
-        @param lin_eq_constraints SXContainer containing the linear equality constraints.
-        @param lin_ineq_constraints SXContainer containing the linear inequality constraints.
+        @param decision_variables MXContainer containing decision variables.
+        @param parameters MXContainer containing parameters.
+        @param cost_terms MXContainer containing cost terms.
+        @param lin_eq_constraints MXContainer containing the linear equality constraints.
+        @param lin_ineq_constraints MXContainer containing the linear inequality constraints.
         @return Instance of the NonlinearCostLinearConstraints class.
         """
         super().__init__(decision_variables, parameters, cost_terms)
@@ -505,23 +505,23 @@ class NonlinearCostNonlinearConstraints(Optimization):
 
     def __init__(
         self,
-        decision_variables: SXContainer,  # SXContainer for decision variables
-        parameters: SXContainer,  # SXContainer for parameters
-        cost_terms: SXContainer,  # SXContainer for cost terms
-        lin_eq_constraints: SXContainer,  # SXContainer for linear equality constraints
-        lin_ineq_constraints: SXContainer,  # SXContainer for linear inequality constraints
-        eq_constraints: SXContainer,  # SXContainer for equality constraints
-        ineq_constraints: SXContainer,  # SXContainer for inequality constraints
+        decision_variables: MXContainer,  # MXContainer for decision variables
+        parameters: MXContainer,  # MXContainer for parameters
+        cost_terms: MXContainer,  # MXContainer for cost terms
+        lin_eq_constraints: MXContainer,  # MXContainer for linear equality constraints
+        lin_ineq_constraints: MXContainer,  # MXContainer for linear inequality constraints
+        eq_constraints: MXContainer,  # MXContainer for equality constraints
+        ineq_constraints: MXContainer,  # MXContainer for inequality constraints
     ):
         """! Initializer for the NonlinearCostNonlinearConstraints class.
 
-        @param decision_variables SXContainer containing decision variables.
-        @param parameters SXContainer containing parameters.
-        @param cost_terms SXContainer containing cost terms.
-        @param lin_eq_constraints SXContainer containing the linear equality constraints.
-        @param lin_ineq_constraints SXContainer containing the linear inequality constraints.
-        @param eq_constraints SXContainer containing the equality constraints.
-        @param ineq_constraints SXContainer containing the inequality constraints.
+        @param decision_variables MXContainer containing decision variables.
+        @param parameters MXContainer containing parameters.
+        @param cost_terms MXContainer containing cost terms.
+        @param lin_eq_constraints MXContainer containing the linear equality constraints.
+        @param lin_ineq_constraints MXContainer containing the linear inequality constraints.
+        @param eq_constraints MXContainer containing the equality constraints.
+        @param ineq_constraints MXContainer containing the inequality constraints.
         @return Instance of the NonlinearCostNonlinearConstraints class.
         """
         super().__init__(decision_variables, parameters, cost_terms)
@@ -546,23 +546,23 @@ class MixedIntegerNonlinearCostNonlinearConstrained(NonlinearCostNonlinearConstr
 
     def __init__(
         self,
-        decision_variables: SXContainer,  # SXContainer for decision variables
-        parameters: SXContainer,  # SXContainer for parameters
-        cost_terms: SXContainer,  # SXContainer for cost terms
-        lin_eq_constraints: SXContainer,  # SXContainer for linear equality constraints
-        lin_ineq_constraints: SXContainer,  # SXContainer for linear inequality constraints
-        eq_constraints: SXContainer,  # SXContainer for equality constraints
-        ineq_constraints: SXContainer,  # SXContainer for inequality constraints
+        decision_variables: MXContainer,  # MXContainer for decision variables
+        parameters: MXContainer,  # MXContainer for parameters
+        cost_terms: MXContainer,  # MXContainer for cost terms
+        lin_eq_constraints: MXContainer,  # MXContainer for linear equality constraints
+        lin_ineq_constraints: MXContainer,  # MXContainer for linear inequality constraints
+        eq_constraints: MXContainer,  # MXContainer for equality constraints
+        ineq_constraints: MXContainer,  # MXContainer for inequality constraints
     ):
         """! Initializer for the MixedIntegerNonlinearCostNonlinearConstrained class.
 
-        @param decision_variables SXContainer containing decision variables (with at least one discrete variable).
-        @param parameters SXContainer containing parameters.
-        @param cost_terms SXContainer containing cost terms.
-        @param lin_eq_constraints SXContainer containing the linear equality constraints.
-        @param lin_ineq_constraints SXContainer containing the linear inequality constraints.
-        @param eq_constraints SXContainer containing the equality constraints.
-        @param ineq_constraints SXContainer containing the inequality constraints.
+        @param decision_variables MXContainer containing decision variables (with at least one discrete variable).
+        @param parameters MXContainer containing parameters.
+        @param cost_terms MXContainer containing cost terms.
+        @param lin_eq_constraints MXContainer containing the linear equality constraints.
+        @param lin_ineq_constraints MXContainer containing the linear inequality constraints.
+        @param eq_constraints MXContainer containing the equality constraints.
+        @param ineq_constraints MXContainer containing the inequality constraints.
         @return Instance of the MixedIntegerNonlinearCostNonlinearConstrained class.
         """
         super().__init__(decision_variables, parameters, cost_terms, lin_eq_constraints,  lin_ineq_constraints, eq_constraints, ineq_constraints)

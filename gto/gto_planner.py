@@ -109,7 +109,8 @@ class GTOPlanner:
         builder.enforce_model_limits(self.robot_name)  # joint limits extracted from URDF        
 
         # Setup solver
-        self.solver = optas.CasADiSolver(builder.build()).setup("ipopt")
+        solver_options = {'ipopt': {'max_iter': 100}}
+        self.solver = optas.CasADiSolver(builder.build()).setup("ipopt", solver_options=solver_options)
 
 
     def plan(self, qc, RT, sdf_cost):
@@ -136,6 +137,52 @@ class GTOPlanner:
         # Get robot configuration
         Q = solution[f"{self.robot_name}/q"]
         return Q.toarray()
+    
+
+    def plan_goalset(self, qc, RTs, sdf_cost):
+
+        n = RTs.shape[0]
+        costs = np.zeros((n, ))
+        Q0 = optas.diag(qc) @ optas.DM.ones(self.robot.ndof, self.T)
+        Qs = []
+        # plan to each goal
+        for i in range(n):
+            print(f'plan to goal {i}')
+
+            # Set initial seed, note joint velocity will be set to zero
+            self.solver.reset_initial_seed(
+                {f"{self.robot_name}/q/x": self.robot.extract_optimized_dimensions(Q0)}
+            )
+
+            # Set parameters
+            RT = RTs[i]
+            print(RT)
+            self.solver.reset_parameters(
+                {
+                    "qc": optas.DM(qc),
+                    "tf_goal": optas.DM(RT),
+                    "sdf_cost": optas.DM(sdf_cost),
+                    f"{self.robot_name}/q/p": self.robot.extract_parameter_dimensions(Q0),
+                }
+            )
+
+            # Solve problem
+            solution = self.solver.solve()
+
+            # Get robot configuration
+            Q = solution[f"{self.robot_name}/q"]
+            costs[i] = solution['f']
+            Qs.append(Q.toarray().copy())
+            print(f'cost {costs[i]}')
+
+            # start from the previous solution
+            Q0 = Q
+
+        # use the solution with the minimum cost
+        print('All costs', costs)
+        index = np.argmin(costs)
+        Q = Qs[index]
+        return Q, index
 
 
 def main():
