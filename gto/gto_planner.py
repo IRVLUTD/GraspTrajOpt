@@ -10,7 +10,6 @@ import optas
 import tf_conversions
 import casadi as cs
 from optas.visualize import Visualizer
-from optas.spatialmath import Quaternion
 from gto.gto_models import GTORobotModel
 from transforms3d.quaternions import mat2quat
 from utils import *
@@ -36,7 +35,7 @@ class GTOPlanner:
         self.setup_optimization()
 
 
-    def setup_optimization(self, goal_size=1):
+    def setup_optimization(self):
         # Setup optimization builder
         builder = optas.OptimizationBuilder(T=self.T, robots=[self.robot])
 
@@ -44,13 +43,8 @@ class GTOPlanner:
         qc = builder.add_parameter(
             "qc", self.robot.ndof
         )  # current robot joint configuration
-        # goal pose of the gripper link_ee, format (tx, ty, tz, qx, qy, qz, qw)
-        tf_goal = builder.add_parameter("tf_goal", 7, goal_size)
-
-        # convert tf_goal to matrix
-        Rotq = Quaternion(tf_goal[3], tf_goal[4], tf_goal[5], tf_goal[6])
-        T_goal = Rotq.getT(tf_goal[0], tf_goal[1], tf_goal[2])
-
+        # goal pose of the gripper link_ee
+        tf_goal = builder.add_parameter("tf_goal", 4, 4)
         # sdf field
         sdf_cost = builder.add_parameter("sdf_cost", self.robot.field_size)
 
@@ -86,7 +80,7 @@ class GTOPlanner:
         # Cost: reach goal pose
         tf = tf_gripper[self.T - 1]    # last time step pose
         points_tf = tf[:3, :3] @ self.gripper_points.T + tf[:3, 3].reshape((3, 1))
-        tf_gripper_goal = T_goal @ self.gripper_tf(Q[:, self.T - 1])
+        tf_gripper_goal = tf_goal @ self.gripper_tf(Q[:, self.T - 1])
         points_tf_goal = tf_gripper_goal[:3, :3] @ self.gripper_points.T + tf_gripper_goal[:3, 3].reshape((3, 1))
         builder.add_cost_term("cost_pos", optas.sumsqr(points_tf - points_tf_goal))
 
@@ -127,16 +121,10 @@ class GTOPlanner:
         )
 
         # Set parameters
-        tf_goal = np.zeros((7, 1))
-        quat = mat2quat(RT[:3, :3])
-        orientation = np.array([quat[1], quat[2], quat[3], quat[0]])   # x, y, z, w
-        tf_goal[:3] = RT[:3, 3].reshape((3, 1))
-        tf_goal[3:] = orientation.reshape((4, 1))
-
         self.solver.reset_parameters(
             {
                 "qc": optas.DM(qc),
-                "tf_goal": optas.DM(tf_goal),
+                "tf_goal": optas.DM(RT),
                 "sdf_cost": optas.DM(sdf_cost),
                 f"{self.robot_name}/q/p": self.robot.extract_parameter_dimensions(Q0),
             }
