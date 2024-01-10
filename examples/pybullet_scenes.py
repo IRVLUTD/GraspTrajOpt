@@ -134,7 +134,7 @@ class SceneReplicaEnv():
         self.object_uids.append(uid)
         self.object_names.append(name)
         p.resetBaseVelocity(uid, (0.0, 0.0, 0.0), (0.0, 0.0, 0.0))
-        for _ in range(100):
+        for _ in range(1000):
             p.stepSimulation()
 
 
@@ -270,7 +270,7 @@ class SceneReplicaEnv():
         # open gripper
         joint_command[12] = 0.05
         joint_command[13] = 0.05        
-        return joint_command
+        return joint_command  
     
 
 def make_args():
@@ -437,3 +437,8 @@ if __name__ == '__main__':
                 index += [n - 1]
             vis.robot_traj(robot, plan[:, index], alpha_spec={'style': 'A'})
             vis.start()
+
+            env.robot.execute_plan(plan)
+            input('next?')
+            env.robot.close_gripper()
+            input('next?')

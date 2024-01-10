@@ -168,11 +168,38 @@ class FixedBaseRobot:
         return [state[0] for state in p.getJointStates(self._id, self._actuated_joints)]
     
 
+    def execute_plan(self, plan):
+        '''
+        @ param plan: shape (ndof, T)
+        '''        
+        for t in range(plan.shape[1]):
+            self.cmd(plan[:, t])
+            for _ in range(100):
+                p.stepSimulation()            
+    
+
 class Fetch(FixedBaseRobot):
     def __init__(self, base_position=[0.0] * 3):
         f = os.path.join(cwd, "robots", "fetch", "fetch.urdf")
         self.urdf_filename = f
         super().__init__(f, base_position=base_position)
+
+
+    def close_gripper(self):
+        q = self.q()
+        q[12] = 0
+        q[13] = 0
+        self.cmd(q)
+        for _ in range(100):
+            p.stepSimulation()
+
+    def open_gripper(self):
+        q = self.q()
+        q[12] = 0.05
+        q[13] = 0.05
+        self.cmd(q)
+        for _ in range(100):
+            p.stepSimulation()             
 
 
 class R2D2(FixedBaseRobot):
