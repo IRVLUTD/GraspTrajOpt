@@ -131,7 +131,7 @@ class SceneReplicaEnv():
         self.object_uids.append(uid)
         self.object_names.append(name)
         p.resetBaseVelocity(uid, (0.0, 0.0, 0.0), (0.0, 0.0, 0.0))
-        for _ in range(1000):
+        for _ in range(2000):
             p.stepSimulation()
 
 
@@ -207,17 +207,16 @@ class SceneReplicaEnv():
         
         # transform depth from NDC to actual depth        
         depth = far * near / (far - (far - near) * depth)
-
-        # backprojection
         intrinsic_matrix = projection_to_intrinsics(head_proj_matrix, self._window_width, self._window_height)
-        depth_pc = DepthPointCloud(depth, intrinsic_matrix, cam_pose, mask)        
-        # depth_pc.show()
-        return depth_pc
+        # self.visualize_data(rgba, depth, mask, depth_pc)
+        return rgba, depth, mask, cam_pose, intrinsic_matrix
 
 
     def visualize_data(self, rgba, depth, mask, depth_pc):                                               
         # visualization
         fig = plt.figure()
+        print(self.object_names)
+        print(self.object_uids)
         
         # show RGB image
         ax = fig.add_subplot(2, 2, 1)
@@ -326,14 +325,17 @@ if __name__ == '__main__':
     pose_standoff[0, 3] = offset
     
     # two orderings
-    for ordering in {"nearest_first", "random"}:
+    for ordering in ["random", "nearest_first"]:
         object_order = meta[ordering][0].split(",")
+        print(ordering, object_order)
         # for each object
         for object_name in object_order:
+            print(object_name)
                                           
             # render image and compute sdf cost field
-            depth_pc = env.get_observation()
-            sdf_cost = depth_pc.get_sdf_cost(robot.workspace_points, epsilon=0.02)
+            rgba, depth, mask, cam_pose, intrinsic_matrix = env.get_observation()
+            depth_pc = DepthPointCloud(depth, intrinsic_matrix, cam_pose)
+            sdf_cost = depth_pc.get_sdf_cost(robot.workspace_points, epsilon=0.05)
 
             # load grasps
             grasp_file = os.path.join(grasp_dir, f"fetch_gripper-{object_name}.json")
@@ -355,8 +357,8 @@ if __name__ == '__main__':
                 RT_grasps_base[i] = RT
 
                 # check if the grasp is in collision
-                RT_off = RT_grasps_base[i] @ pose_standoff
                 q_user_input = [0.05] * gripper_model.ndof
+                RT_off = RT @ pose_standoff
                 gripper_points, normals = gripper_model.compute_fk_surface_points(q_user_input, tf_base=RT_off)
                 sdf = depth_pc.get_sdf(gripper_points)
 
@@ -411,17 +413,16 @@ if __name__ == '__main__':
             vis.start()
 
             env.robot.execute_plan(plan)
-            input('close gripper?')
+            time.sleep(1.0)
             env.robot.close_gripper()
-            input('lift?')
             # list object
             # gipper pose
             pos, orn = p.getLinkState(env.robot._id, env.robot.ee_index)[:2]
             pose = list(pos) + [orn[3], orn[0], orn[1], orn[2]]
             pose_mat = unpack_pose(pose)
-            pose_mat[2, 3] += 0.25
+            pose_mat[2, 3] += 0.4
             qc = env.robot.q()
             plan = planner.plan(qc, pose_mat, sdf_cost)
             env.robot.execute_plan(plan)
-            input('retract?')
+            # retract
             env.robot.retract()

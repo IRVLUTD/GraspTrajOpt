@@ -221,11 +221,16 @@ class Fetch(FixedBaseRobot):
 
     def close_gripper(self):
         q = self.q()
-        q[12] = 0
-        q[13] = 0
-        self.cmd(q)
-        for _ in range(100):
-            p.stepSimulation()
+        gripper_position = 0
+        start = q[12]
+        pos = np.linspace(start, gripper_position, num=10)
+        for position in pos:
+            q[12] = position
+            q[13] = position
+            self.cmd(q)
+            for _ in range(100):
+                p.stepSimulation()
+
 
     def open_gripper(self):
         q = self.q()
