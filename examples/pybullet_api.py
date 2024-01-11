@@ -134,6 +134,7 @@ class FixedBaseRobot:
         self._actuated_joint_names = []
         for j in range(self.num_joints):
             info = p.getJointInfo(self._id, j)
+            print(f'joint {j}:', info[1])
             if info[2] in {p.JOINT_REVOLUTE, p.JOINT_PRISMATIC}:
                 self._actuated_joints.append(j)
                 self._actuated_joint_names.append(info[1])
@@ -184,7 +185,6 @@ class Fetch(FixedBaseRobot):
         self.urdf_filename = f
         super().__init__(f, base_position=base_position)
         self.ee_index = 16
-
 
     def default_pose(self):
         # set robot pose
@@ -238,7 +238,7 @@ class Fetch(FixedBaseRobot):
         q[13] = 0.05
         self.cmd(q)
         for _ in range(100):
-            p.stepSimulation()
+            p.stepSimulation()             
 
 
 class R2D2(FixedBaseRobot):

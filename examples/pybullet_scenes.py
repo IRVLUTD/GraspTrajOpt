@@ -92,7 +92,7 @@ class SceneReplicaEnv():
         p.setRealTimeSimulation(1)
 
     def stop(self):
-        p.setRealTimeSimulation(0)    
+        p.setRealTimeSimulation(0)        
 
 
     def reset(self):
@@ -221,6 +221,8 @@ class SceneReplicaEnv():
     def visualize_data(self, rgba, depth, mask, depth_pc):                                               
         # visualization
         fig = plt.figure()
+        print(self.object_names)
+        print(self.object_uids)
         
         # show RGB image
         ax = fig.add_subplot(2, 2, 1)
@@ -320,12 +322,12 @@ if __name__ == '__main__':
         print(obj, position, orientation)
     # start simulation
     env.start()
-    time.sleep(3.0)
+    time.sleep(3.0)        
 
     # Initialize planner
     print('Initialize planner')
-    planner = GTOPlanner(robot, link_ee, link_gripper)    
-    ik_solver = IKSolver(robot, link_ee, link_gripper)
+    planner = GTOPlanner(robot, link_ee, link_gripper)
+    ik_solver = IKSolver(robot, link_ee, link_gripper)   
 
     # define the standoff pose
     offset = -0.01
@@ -335,8 +337,10 @@ if __name__ == '__main__':
     # two orderings
     for ordering in ["nearest_first", "random"]:
         object_order = meta[ordering][0].split(",")
+        print(ordering, object_order)
         # for each object
         for object_name in object_order:
+            print(object_name)
                                           
             # render image and compute sdf cost field
             rgba, depth, mask, cam_pose, intrinsic_matrix = env.get_observation()
@@ -365,8 +369,8 @@ if __name__ == '__main__':
                 RT_grasps_base[i] = RT
 
                 # check if the grasp is in collision
-                RT_off = RT_grasps_base[i] @ pose_standoff
                 q_user_input = [0.05] * gripper_model.ndof
+                RT_off = RT @ pose_standoff
                 gripper_points, normals = gripper_model.compute_fk_surface_points(q_user_input, tf_base=RT_off)
                 sdf = depth_pc.get_sdf(gripper_points)
 
@@ -402,14 +406,13 @@ if __name__ == '__main__':
             RT_grasps_base = RT_grasps_base[found_ik == 1] 
             print('Among %d grasps, %d found IK' % (n, np.sum(found_ik)))
             if RT_grasps_base.shape[0] == 0:
-                continue
+                continue            
 
             # plan to a grasp
             qc = env.robot.q()
             # RT = RT_grasps_base[0]
             # plan = planner.plan(qc, RT, sdf_cost)
-            plan, index = planner.plan_goalset(qc, RT_grasps_base, sdf_cost)
-            RT = RT_grasps_base[index]
+            plan = planner.plan_goalset(qc, RT_grasps_base, sdf_cost)
 
             # visualize grasps
             vis = Visualizer(camera_position=[3, 0, 3])
@@ -417,17 +420,17 @@ if __name__ == '__main__':
             vis.points(
                 depth_pc.points,
             )
-            q = [0, 0]
-            position = RT[:3, 3]
-            # scalar-last (x, y, z, w) format in optas
-            quat = mat2quat(RT[:3, :3])
-            orientation = [quat[1], quat[2], quat[3], quat[0]]
-            vis.robot(
-                gripper_model,
-                base_position=position,
-                base_orientation=orientation,
-                q=q
-            )
+            # q = [0, 0]
+            # position = RT[:3, 3]
+            # # scalar-last (x, y, z, w) format in optas
+            # quat = mat2quat(RT[:3, :3])
+            # orientation = [quat[1], quat[2], quat[3], quat[0]]
+            # vis.robot(
+            #     gripper_model,
+            #     base_position=position,
+            #     base_orientation=orientation,
+            #     q=q
+            # )
             # robot trajectory
             # sample plan
             n = plan.shape[1]
@@ -450,4 +453,4 @@ if __name__ == '__main__':
             plan = planner.plan(qc, pose_mat, sdf_cost)
             env.robot.execute_plan(plan)
             # retract
-            env.robot.retract()            
+            env.robot.retract()

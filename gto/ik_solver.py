@@ -143,4 +143,4 @@ if __name__ == "__main__":
         q=q_solution,
         alpha=0.1,
     )
-    vis.start()    
+    vis.start()

@@ -1,5 +1,6 @@
 """! @brief This is a partial port to Python/CasADi, with some modifications and additions, of the Spatial Math Toolbox for MATLAB. See the following. https://github.com/petercorke/spatialmath-matlab """
 
+import array
 import functools
 import casadi as cs
 from casadi import sin, cos, vec
@@ -154,6 +155,16 @@ def rotz(theta: ArrayType) -> CasADiArrayType:
         cs.horzcat(ct, -st, 0.0),
         cs.horzcat(st, ct, 0.0),
         cs.DM([[0.0, 0.0, 1.0]]),
+    )
+
+@arrayify_args
+def standoff(offset: ArrayType) -> CasADiArrayType:
+    # define the standoff pose
+    return cs.vertcat(
+        cs.horzcat(1.0, 0.0, 0.0, offset),
+        cs.DM([[0.0, 1.0, 0.0, 0.0]]),
+        cs.DM([[0.0, 0.0, 1.0, 0.0]]),
+        cs.DM([[0.0, 0.0, 0.0, 1.0]]),
     )
 
 
