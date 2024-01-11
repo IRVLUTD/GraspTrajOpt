@@ -7,11 +7,11 @@ import _init_paths
 
 
 class DepthPointCloud:
-    def __init__(self, depth, intrinsic_matrix, camera_pose, mask=None, threshold=1.5):
+    def __init__(self, depth, intrinsic_matrix, camera_pose, target_mask=None, threshold=1.5):
         self.depth = depth
         self.intrinsic_matrix = intrinsic_matrix
         self.camera_pose = camera_pose
-        self.mask = mask
+        self.target_mask = target_mask
         self.width = depth.shape[1]
         self.height = depth.shape[0]
         self.threshold = threshold
@@ -37,7 +37,10 @@ class DepthPointCloud:
         width = im_depth.shape[1]
         height = im_depth.shape[0]
         depth = im_depth.astype(np.float32, copy=True).flatten()
-        mask = (depth != 0) & (depth < self.threshold)
+        if self.target_mask is not None:
+            mask = (depth != 0) & (depth < self.threshold) & (self.target_mask.flatten() == 0)
+        else:
+            mask = (depth != 0) & (depth < self.threshold)
 
         x, y = np.meshgrid(np.arange(width), np.arange(height))
         ones = np.ones((height, width), dtype=np.float32)
@@ -60,7 +63,7 @@ class DepthPointCloud:
         return distances
     
     
-    def get_sdf_cost(self, query_points, epsilon=0.02):
+    def get_sdf_cost(self, query_points, epsilon=0.05):
         print('computing sdf cost...')
         distances, indices = self.kd_tree.query(query_points)
         distances = distances.astype(np.float32).reshape(-1)

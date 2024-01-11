@@ -158,6 +158,17 @@ def rotz(theta: ArrayType) -> CasADiArrayType:
 
 
 @arrayify_args
+def standoff(offset: ArrayType) -> CasADiArrayType:
+    # define the standoff pose
+    return cs.vertcat(
+        cs.horzcat(1.0, 0.0, 0.0, offset),
+        cs.DM([[0.0, 1.0, 0.0, 0.0]]),
+        cs.DM([[0.0, 0.0, 1.0, 0.0]]),
+        cs.DM([[0.0, 0.0, 0.0, 1.0]]),
+    )
+
+
+@arrayify_args
 def rpy2r(rpy: ArrayType, opt: str = "zyx") -> CasADiArrayType:
     """! Roll-pitch-yaw angles to SO(3) rotation matrix.
 

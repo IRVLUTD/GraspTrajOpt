@@ -151,7 +151,7 @@ class FixedBaseRobot:
             self._actuated_joints,
             p.POSITION_CONTROL,
             targetPositions=np.asarray(q).tolist(),
-        )
+        )     
 
     def cmd_torque(self, taus):
         for index in range(len(self._actuated_joints)):
@@ -168,11 +168,77 @@ class FixedBaseRobot:
         return [state[0] for state in p.getJointStates(self._id, self._actuated_joints)]
     
 
+    def execute_plan(self, plan):
+        '''
+        @ param plan: shape (ndof, T)
+        '''        
+        for t in range(plan.shape[1]):
+            self.cmd(plan[:, t])
+            for _ in range(200):
+                p.stepSimulation()      
+    
+
 class Fetch(FixedBaseRobot):
     def __init__(self, base_position=[0.0] * 3):
         f = os.path.join(cwd, "robots", "fetch", "fetch.urdf")
         self.urdf_filename = f
         super().__init__(f, base_position=base_position)
+        self.ee_index = 16
+
+
+    def default_pose(self):
+        # set robot pose
+        # [b'r_wheel_joint', b'l_wheel_joint', b'torso_lift_joint', b'head_pan_joint', b'head_tilt_joint', b'shoulder_pan_joint', 
+        # b'shoulder_lift_joint', b'upperarm_roll_joint', b'elbow_flex_joint', b'forearm_roll_joint', b'wrist_flex_joint', 
+        # b'wrist_roll_joint', b'r_gripper_finger_joint', b'l_gripper_finger_joint', b'bellows_joint']
+
+        joint_command = np.zeros((self.robot.ndof, ), dtype=np.float32)
+        # arm_joint_names = ["shoulder_pan_joint", "shoulder_lift_joint", "upperarm_roll_joint",
+        #              "elbow_flex_joint", "forearm_roll_joint", "wrist_flex_joint", "wrist_roll_joint"]
+        # arm_joint_positions  = [1.32, 0.7, 0.0, -2.0, 0.0, -0.57, 0.0]
+
+        # raise torso
+        joint_command[2] = 0.4
+        # move head
+        joint_command[3] = 0.009195
+        joint_command[4] = 0.908270
+        # move arm
+        index = [5, 6, 7, 8, 9, 10, 11]
+        joint_command[index] = [1.32, 0.7, 0.0, -2.0, 0.0, -0.57, 0.0]
+        # open gripper
+        joint_command[12] = 0.05
+        joint_command[13] = 0.05        
+        return joint_command          
+
+
+    def retract(self):
+        q = self.default_pose()
+        self.cmd(q)
+        for _ in range(100):
+            p.stepSimulation()
+        self.open_gripper()
+
+
+    def close_gripper(self):
+        q = self.q()
+        gripper_position = 0
+        start = q[12]
+        pos = np.linspace(start, gripper_position, num=10)
+        for position in pos:
+            q[12] = position
+            q[13] = position
+            self.cmd(q)
+            for _ in range(100):
+                p.stepSimulation()
+
+
+    def open_gripper(self):
+        q = self.q()
+        q[12] = 0.05
+        q[13] = 0.05
+        self.cmd(q)
+        for _ in range(100):
+            p.stepSimulation()
 
 
 class R2D2(FixedBaseRobot):

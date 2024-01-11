@@ -13,6 +13,7 @@ import optas
 from optas.visualize import Visualizer
 from gto.gto_models import GTORobotModel
 from gto.gto_planner import GTOPlanner
+from gto.ik_solver import IKSolver
 from transforms3d.quaternions import mat2quat
 import pyrender
 
@@ -98,10 +99,7 @@ class SceneReplicaEnv():
 
         # set robot 
         self.robot = Fetch()
-        q = self.default_pose()
-        self.robot.cmd(q)
-        for _ in range(1000):
-            p.stepSimulation()
+        self.robot.retract()
 
         # Set table and plane
         self.object_uids = []
@@ -210,12 +208,9 @@ class SceneReplicaEnv():
         
         # transform depth from NDC to actual depth        
         depth = far * near / (far - (far - near) * depth)
-
-        # backprojection
         intrinsic_matrix = projection_to_intrinsics(head_proj_matrix, self._window_width, self._window_height)
-        depth_pc = DepthPointCloud(depth, intrinsic_matrix, cam_pose, mask)        
-        # depth_pc.show()
-        return depth_pc
+        # self.visualize_data(rgba, depth, mask, depth_pc)
+        return rgba, depth, mask, cam_pose, intrinsic_matrix
 
 
     def visualize_data(self, rgba, depth, mask, depth_pc):                                               
@@ -246,31 +241,6 @@ class SceneReplicaEnv():
         ax.set_title('3D ploud cloud in robot base')   
         set_axes_equal(ax)                    
         plt.show()
-    
-
-    def default_pose(self):
-        # set robot pose
-        # [b'r_wheel_joint', b'l_wheel_joint', b'torso_lift_joint', b'head_pan_joint', b'head_tilt_joint', b'shoulder_pan_joint', 
-        # b'shoulder_lift_joint', b'upperarm_roll_joint', b'elbow_flex_joint', b'forearm_roll_joint', b'wrist_flex_joint', 
-        # b'wrist_roll_joint', b'r_gripper_finger_joint', b'l_gripper_finger_joint', b'bellows_joint']
-
-        joint_command = np.zeros((self.robot.ndof, ), dtype=np.float32)
-        # arm_joint_names = ["shoulder_pan_joint", "shoulder_lift_joint", "upperarm_roll_joint",
-        #              "elbow_flex_joint", "forearm_roll_joint", "wrist_flex_joint", "wrist_roll_joint"]
-        # arm_joint_positions  = [1.32, 0.7, 0.0, -2.0, 0.0, -0.57, 0.0]
-
-        # raise torso
-        joint_command[2] = 0.4
-        # move head
-        joint_command[3] = 0.009195
-        joint_command[4] = 0.908270
-        # move arm
-        index = [5, 6, 7, 8, 9, 10, 11]
-        joint_command[index] = [1.32, 0.7, 0.0, -2.0, 0.0, -0.57, 0.0]
-        # open gripper
-        joint_command[12] = 0.05
-        joint_command[13] = 0.05        
-        return joint_command
     
 
 def make_args():
@@ -347,6 +317,7 @@ if __name__ == '__main__':
     # Initialize planner
     print('Initialize planner')
     planner = GTOPlanner(robot, link_ee, link_gripper)    
+    ik_solver = IKSolver(robot, link_ee, link_gripper)
 
     # define the standoff pose
     offset = -0.01
@@ -354,14 +325,17 @@ if __name__ == '__main__':
     pose_standoff[0, 3] = offset
     
     # two orderings
-    for ordering in {"nearest_first", "random"}:
+    for ordering in ["nearest_first", "random"]:
         object_order = meta[ordering][0].split(",")
         # for each object
         for object_name in object_order:
                                           
             # render image and compute sdf cost field
-            depth_pc = env.get_observation()
-            sdf_cost = depth_pc.get_sdf_cost(robot.workspace_points, epsilon=0.02)
+            rgba, depth, mask, cam_pose, intrinsic_matrix = env.get_observation()
+            idx = env.object_uids[env.object_names.index(object_name)]
+            target_mask = mask == idx
+            depth_pc = DepthPointCloud(depth, intrinsic_matrix, cam_pose, target_mask)
+            sdf_cost = depth_pc.get_sdf_cost(robot.workspace_points, epsilon=0.05)
 
             # load grasps
             grasp_file = os.path.join(grasp_dir, f"fetch_gripper-{object_name}.json")
@@ -405,6 +379,22 @@ if __name__ == '__main__':
             
             RT_grasps_base = RT_grasps_base[in_collision == 0] 
             print('Among %d grasps, %d in collision, %d collision-free' % (n, np.sum(in_collision), RT_grasps_base.shape[0]))
+            if RT_grasps_base.shape[0] == 0:
+                continue
+
+            # test IK for remaining grasps
+            n = RT_grasps_base.shape[0]
+            found_ik = np.zeros((n, ), dtype=np.int32)
+            q0 = np.array(env.robot.q()).reshape((env.robot.ndof, 1))
+            for i in range(n):
+                RT = RT_grasps_base[i]
+                q_solution, err_pos, err_rot = ik_solver.solve_ik(q0, RT)
+                if err_pos < 0.01 and err_rot < 5:
+                    found_ik[i] = 1
+            RT_grasps_base = RT_grasps_base[found_ik == 1] 
+            print('Among %d grasps, %d found IK' % (n, np.sum(found_ik)))
+            if RT_grasps_base.shape[0] == 0:
+                continue
 
             # plan to a grasp
             qc = env.robot.q()
@@ -438,3 +428,18 @@ if __name__ == '__main__':
                 index += [n - 1]
             vis.robot_traj(robot, plan[:, index], alpha_spec={'style': 'A'})
             vis.start()
+
+            env.robot.execute_plan(plan)
+            time.sleep(1.0)
+            env.robot.close_gripper()
+            # list object
+            # gipper pose
+            pos, orn = p.getLinkState(env.robot._id, env.robot.ee_index)[:2]
+            pose = list(pos) + [orn[3], orn[0], orn[1], orn[2]]
+            pose_mat = unpack_pose(pose)
+            pose_mat[2, 3] += 0.4
+            qc = env.robot.q()
+            plan = planner.plan(qc, pose_mat, sdf_cost)
+            env.robot.execute_plan(plan)
+            # retract
+            env.robot.retract()            

@@ -63,7 +63,7 @@ class IKSolver:
         q = solution[f"{self.robot_name}/q"]
 
         # compute errors
-        tf = self.fk(solution[f"{robot_name}/q"]).toarray()
+        tf = self.fk(solution[f"{self.robot_name}/q"]).toarray()
         err_pos = np.linalg.norm(RT[:3, 3] - tf[:3, 3])
         quat1 = mat2quat(RT[:3, :3])
         quat2 = mat2quat(tf[:3, :3])

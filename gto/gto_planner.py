@@ -10,6 +10,7 @@ import optas
 import tf_conversions
 import casadi as cs
 from optas.visualize import Visualizer
+from optas.spatialmath import standoff
 from gto.gto_models import GTORobotModel
 from transforms3d.quaternions import mat2quat
 from utils import *
@@ -23,6 +24,9 @@ class GTOPlanner:
         self.Tmax = 10.0  # trajectory of 5 secs
         t = optas.linspace(0, self.Tmax, self.T)
         self.dt = float((t[1] - t[0]).toarray()[0, 0])  # time step
+        self.standoff_offset = -5
+        self.standoff_distance = -0.1
+        self.pose_standoff = standoff(self.standoff_distance)        
 
         # Setup robot
         self.robot = robot
@@ -32,10 +36,9 @@ class GTOPlanner:
         self.gripper_points = robot.surface_pc_map[link_gripper].points
         self.gripper_tf = robot.get_link_transform_function(link=link_gripper, base_link=link_ee)
         self.collision_avoidance = collision_avoidance
-        self.setup_optimization()
 
 
-    def setup_optimization(self):
+    def setup_optimization(self, use_standoff=False):
         # Setup optimization builder
         builder = optas.OptimizationBuilder(T=self.T, robots=[self.robot])
 
@@ -82,7 +85,14 @@ class GTOPlanner:
         points_tf = tf[:3, :3] @ self.gripper_points.T + tf[:3, 3].reshape((3, 1))
         tf_gripper_goal = tf_goal @ self.gripper_tf(Q[:, self.T - 1])
         points_tf_goal = tf_gripper_goal[:3, :3] @ self.gripper_points.T + tf_gripper_goal[:3, 3].reshape((3, 1))
-        builder.add_cost_term("cost_pos", optas.sumsqr(points_tf - points_tf_goal))
+        if use_standoff:
+            tf_standoff = tf_gripper[self.T + self.standoff_offset]
+            points_standoff = tf_standoff[:3, :3] @ self.gripper_points.T + tf_standoff[:3, 3].reshape((3, 1))
+            tf_gripper_standoff = tf_goal @ self.pose_standoff @ self.gripper_tf(Q[:, self.T + self.standoff_offset])
+            points_standoff_goal = tf_gripper_standoff[:3, :3] @ self.gripper_points.T + tf_gripper_standoff[:3, 3].reshape((3, 1))
+            builder.add_cost_term("cost_pos", optas.sumsqr(points_tf - points_tf_goal) + optas.sumsqr(points_standoff - points_standoff_goal))
+        else:
+            builder.add_cost_term("cost_pos", optas.sumsqr(points_tf - points_tf_goal))
 
         # Cost: obstacle avoidance
         if self.collision_avoidance:
@@ -99,7 +109,7 @@ class GTOPlanner:
                         points_base_all = optas.horzcat(points_base_all, point_base)
             points_base_all = points_base_all.T
             offsets = self.robot.points_to_offsets(points_base_all)
-            builder.add_cost_term("cost_sdf", optas.sumsqr(sdf_cost[offsets]))
+            builder.add_cost_term("cost_sdf", 5 * optas.sumsqr(sdf_cost[offsets]))
 
         # Cost: minimize joint velocity
         dQ = builder.get_robot_states_and_parameters(self.robot_name, time_deriv=1)
@@ -113,7 +123,8 @@ class GTOPlanner:
         self.solver = optas.CasADiSolver(builder.build()).setup("ipopt", solver_options=solver_options)
 
 
-    def plan(self, qc, RT, sdf_cost):
+    def plan(self, qc, RT, sdf_cost, use_standoff=False):
+        self.setup_optimization(use_standoff)
         # Set initial seed, note joint velocity will be set to zero
         Q0 = optas.diag(qc) @ optas.DM.ones(self.robot.ndof, self.T)
 
@@ -139,7 +150,8 @@ class GTOPlanner:
         return Q.toarray()
     
 
-    def plan_goalset(self, qc, RTs, sdf_cost):
+    def plan_goalset(self, qc, RTs, sdf_cost, use_standoff=True):
+        self.setup_optimization(use_standoff)
 
         n = RTs.shape[0]
         costs = np.zeros((n, ))
