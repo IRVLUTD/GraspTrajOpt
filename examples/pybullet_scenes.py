@@ -314,7 +314,7 @@ if __name__ == '__main__':
         obj = obj.strip()
         filename = os.path.join(model_dir, obj, f'{obj}.urdf')
         position = meta["poses"][i][:3]
-        position[2] += 0.03
+        position[2] += 0.04
         quat = meta["poses"][i][3:]
         # scalar-last (x, y, z, w) format in optas
         orientation = [quat[1], quat[2], quat[3], quat[0]]
