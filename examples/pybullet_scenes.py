@@ -98,10 +98,7 @@ class SceneReplicaEnv():
 
         # set robot 
         self.robot = Fetch()
-        q = self.default_pose()
-        self.robot.cmd(q)
-        for _ in range(1000):
-            p.stepSimulation()
+        self.robot.retract()
 
         # Set table and plane
         self.object_uids = []
@@ -246,31 +243,6 @@ class SceneReplicaEnv():
         ax.set_title('3D ploud cloud in robot base')   
         set_axes_equal(ax)                    
         plt.show()
-    
-
-    def default_pose(self):
-        # set robot pose
-        # [b'r_wheel_joint', b'l_wheel_joint', b'torso_lift_joint', b'head_pan_joint', b'head_tilt_joint', b'shoulder_pan_joint', 
-        # b'shoulder_lift_joint', b'upperarm_roll_joint', b'elbow_flex_joint', b'forearm_roll_joint', b'wrist_flex_joint', 
-        # b'wrist_roll_joint', b'r_gripper_finger_joint', b'l_gripper_finger_joint', b'bellows_joint']
-
-        joint_command = np.zeros((self.robot.ndof, ), dtype=np.float32)
-        # arm_joint_names = ["shoulder_pan_joint", "shoulder_lift_joint", "upperarm_roll_joint",
-        #              "elbow_flex_joint", "forearm_roll_joint", "wrist_flex_joint", "wrist_roll_joint"]
-        # arm_joint_positions  = [1.32, 0.7, 0.0, -2.0, 0.0, -0.57, 0.0]
-
-        # raise torso
-        joint_command[2] = 0.4
-        # move head
-        joint_command[3] = 0.009195
-        joint_command[4] = 0.908270
-        # move arm
-        index = [5, 6, 7, 8, 9, 10, 11]
-        joint_command[index] = [1.32, 0.7, 0.0, -2.0, 0.0, -0.57, 0.0]
-        # open gripper
-        joint_command[12] = 0.05
-        joint_command[13] = 0.05        
-        return joint_command  
     
 
 def make_args():
@@ -439,6 +411,17 @@ if __name__ == '__main__':
             vis.start()
 
             env.robot.execute_plan(plan)
-            input('next?')
+            input('close gripper?')
             env.robot.close_gripper()
-            input('next?')
+            input('lift?')
+            # list object
+            # gipper pose
+            pos, orn = p.getLinkState(env.robot._id, env.robot.ee_index)[:2]
+            pose = list(pos) + [orn[3], orn[0], orn[1], orn[2]]
+            pose_mat = unpack_pose(pose)
+            pose_mat[2, 3] += 0.25
+            qc = env.robot.q()
+            plan = planner.plan(qc, pose_mat, sdf_cost)
+            env.robot.execute_plan(plan)
+            input('retract?')
+            env.robot.retract()

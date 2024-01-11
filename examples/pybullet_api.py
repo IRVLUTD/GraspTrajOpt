@@ -134,6 +134,7 @@ class FixedBaseRobot:
         self._actuated_joint_names = []
         for j in range(self.num_joints):
             info = p.getJointInfo(self._id, j)
+            print(f'joint {j}:', info[1])
             if info[2] in {p.JOINT_REVOLUTE, p.JOINT_PRISMATIC}:
                 self._actuated_joints.append(j)
                 self._actuated_joint_names.append(info[1])
@@ -183,6 +184,39 @@ class Fetch(FixedBaseRobot):
         f = os.path.join(cwd, "robots", "fetch", "fetch.urdf")
         self.urdf_filename = f
         super().__init__(f, base_position=base_position)
+        self.ee_index = 16
+
+    def default_pose(self):
+        # set robot pose
+        # [b'r_wheel_joint', b'l_wheel_joint', b'torso_lift_joint', b'head_pan_joint', b'head_tilt_joint', b'shoulder_pan_joint', 
+        # b'shoulder_lift_joint', b'upperarm_roll_joint', b'elbow_flex_joint', b'forearm_roll_joint', b'wrist_flex_joint', 
+        # b'wrist_roll_joint', b'r_gripper_finger_joint', b'l_gripper_finger_joint', b'bellows_joint']
+
+        joint_command = np.zeros((self.robot.ndof, ), dtype=np.float32)
+        # arm_joint_names = ["shoulder_pan_joint", "shoulder_lift_joint", "upperarm_roll_joint",
+        #              "elbow_flex_joint", "forearm_roll_joint", "wrist_flex_joint", "wrist_roll_joint"]
+        # arm_joint_positions  = [1.32, 0.7, 0.0, -2.0, 0.0, -0.57, 0.0]
+
+        # raise torso
+        joint_command[2] = 0.4
+        # move head
+        joint_command[3] = 0.009195
+        joint_command[4] = 0.908270
+        # move arm
+        index = [5, 6, 7, 8, 9, 10, 11]
+        joint_command[index] = [1.32, 0.7, 0.0, -2.0, 0.0, -0.57, 0.0]
+        # open gripper
+        joint_command[12] = 0.05
+        joint_command[13] = 0.05        
+        return joint_command          
+
+
+    def retract(self):
+        q = self.default_pose()
+        self.cmd(q)
+        for _ in range(100):
+            p.stepSimulation()
+        self.open_gripper()
 
 
     def close_gripper(self):
