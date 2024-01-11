@@ -13,6 +13,7 @@ import optas
 from optas.visualize import Visualizer
 from gto.gto_models import GTORobotModel
 from gto.gto_planner import GTOPlanner
+from gto.ik_solver import IKSolver
 from transforms3d.quaternions import mat2quat
 import pyrender
 
@@ -59,7 +60,8 @@ class SceneReplicaEnv():
         self._window_width = 640
         self._window_height = 480
         self.object_uids = []
-        self._timeStep = 1. / 1000.
+        self.hz = 50
+        self._timeStep = 1. / float(self.hz)
         self.root_dir = os.path.dirname(os.path.abspath(__file__))
 
         self.connect()
@@ -85,6 +87,12 @@ class SceneReplicaEnv():
                 p.loadPlugin(egl.get_filename(), "_eglRendererPlugin")
 
         self.connected = True
+
+    def start(self):
+        p.setRealTimeSimulation(1)
+
+    def stop(self):
+        p.setRealTimeSimulation(0)        
 
 
     def reset(self):
@@ -131,8 +139,6 @@ class SceneReplicaEnv():
         self.object_uids.append(uid)
         self.object_names.append(name)
         p.resetBaseVelocity(uid, (0.0, 0.0, 0.0), (0.0, 0.0, 0.0))
-        for _ in range(2000):
-            p.stepSimulation()
 
 
     def get_object_pose(self, name):
@@ -308,16 +314,20 @@ if __name__ == '__main__':
         obj = obj.strip()
         filename = os.path.join(model_dir, obj, f'{obj}.urdf')
         position = meta["poses"][i][:3]
-        position[2] += 0.04
+        position[2] += 0.03
         quat = meta["poses"][i][3:]
         # scalar-last (x, y, z, w) format in optas
         orientation = [quat[1], quat[2], quat[3], quat[0]]
         env.place_objects(filename, obj, position, orientation)
         print(obj, position, orientation)
+    # start simulation
+    env.start()
+    time.sleep(3.0)        
 
     # Initialize planner
     print('Initialize planner')
-    planner = GTOPlanner(robot, link_ee, link_gripper)    
+    planner = GTOPlanner(robot, link_ee, link_gripper)
+    ik_solver = IKSolver(robot, link_ee, link_gripper)   
 
     # define the standoff pose
     offset = -0.01
@@ -334,7 +344,9 @@ if __name__ == '__main__':
                                           
             # render image and compute sdf cost field
             rgba, depth, mask, cam_pose, intrinsic_matrix = env.get_observation()
-            depth_pc = DepthPointCloud(depth, intrinsic_matrix, cam_pose)
+            idx = env.object_uids[env.object_names.index(object_name)]
+            target_mask = mask == idx
+            depth_pc = DepthPointCloud(depth, intrinsic_matrix, cam_pose, target_mask)
             sdf_cost = depth_pc.get_sdf_cost(robot.workspace_points, epsilon=0.05)
 
             # load grasps
@@ -379,6 +391,22 @@ if __name__ == '__main__':
             
             RT_grasps_base = RT_grasps_base[in_collision == 0] 
             print('Among %d grasps, %d in collision, %d collision-free' % (n, np.sum(in_collision), RT_grasps_base.shape[0]))
+            if RT_grasps_base.shape[0] == 0:
+                continue
+
+            # test IK for remaining grasps
+            n = RT_grasps_base.shape[0]
+            found_ik = np.zeros((n, ), dtype=np.int32)
+            q0 = np.array(env.robot.q()).reshape((env.robot.ndof, 1))
+            for i in range(n):
+                RT = RT_grasps_base[i]
+                q_solution, err_pos, err_rot = ik_solver.solve_ik(q0, RT)
+                if err_pos < 0.01 and err_rot < 5:
+                    found_ik[i] = 1
+            RT_grasps_base = RT_grasps_base[found_ik == 1] 
+            print('Among %d grasps, %d found IK' % (n, np.sum(found_ik)))
+            if RT_grasps_base.shape[0] == 0:
+                continue            
 
             # plan to a grasp
             qc = env.robot.q()

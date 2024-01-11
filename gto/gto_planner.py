@@ -26,7 +26,7 @@ class GTOPlanner:
         t = optas.linspace(0, self.Tmax, self.T)
         self.dt = float((t[1] - t[0]).toarray()[0, 0])  # time step
         self.standoff_offset = -5
-        self.standoff_distance = -0.05
+        self.standoff_distance = -0.1
         self.pose_standoff = standoff(self.standoff_distance)
 
         # Setup robot
@@ -117,7 +117,7 @@ class GTOPlanner:
                         points_base_all = optas.horzcat(points_base_all, point_base)
             points_base_all = points_base_all.T
             offsets = self.robot.points_to_offsets(points_base_all)
-            builder.add_cost_term("cost_sdf", optas.sumsqr(sdf_cost[offsets]))
+            builder.add_cost_term("cost_sdf", 3 * optas.sumsqr(sdf_cost[offsets]))
 
         # Cost: minimize joint velocity
         dQ = builder.get_robot_states_and_parameters(self.robot_name, time_deriv=1)
