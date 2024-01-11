@@ -60,7 +60,8 @@ class SceneReplicaEnv():
         self._window_width = 640
         self._window_height = 480
         self.object_uids = []
-        self._timeStep = 1. / 1000.
+        self.hz = 50
+        self._timeStep = 1. / float(self.hz)
         self.root_dir = os.path.dirname(os.path.abspath(__file__))
 
         self.connect()
@@ -86,6 +87,12 @@ class SceneReplicaEnv():
                 p.loadPlugin(egl.get_filename(), "_eglRendererPlugin")
 
         self.connected = True
+
+    def start(self):
+        p.setRealTimeSimulation(1)
+
+    def stop(self):
+        p.setRealTimeSimulation(0)    
 
 
     def reset(self):
@@ -132,8 +139,6 @@ class SceneReplicaEnv():
         self.object_uids.append(uid)
         self.object_names.append(name)
         p.resetBaseVelocity(uid, (0.0, 0.0, 0.0), (0.0, 0.0, 0.0))
-        for _ in range(100):
-            p.stepSimulation()
 
 
     def get_object_pose(self, name):
@@ -313,6 +318,9 @@ if __name__ == '__main__':
         orientation = [quat[1], quat[2], quat[3], quat[0]]
         env.place_objects(filename, obj, position, orientation)
         print(obj, position, orientation)
+    # start simulation
+    env.start()
+    time.sleep(3.0)
 
     # Initialize planner
     print('Initialize planner')

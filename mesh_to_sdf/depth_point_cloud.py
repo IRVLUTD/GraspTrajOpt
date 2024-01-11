@@ -124,6 +124,6 @@ class DepthPointCloud:
         # This only has an effect if the camera is inside the model
         in_viewport = (pixels[:, 0] >= 0) & (pixels[:, 1] >= 0) & (pixels[:, 0] < self.width) & (pixels[:, 1] < self.height)
         pc_camera = pc_camera.T
-        result = np.zeros(points.shape[0], dtype=bool)
+        result = np.ones(points.shape[0], dtype=bool)
         result[in_viewport] = pc_camera[in_viewport, 2] < self.depth[pixels[in_viewport, 1], pixels[in_viewport, 0]]
         return result
