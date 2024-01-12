@@ -1,11 +1,12 @@
-import os
+from email.mime import base
+import os, sys
 import time
 import numpy as np
 import pybullet as p
 import argparse
 import scipy
 import matplotlib.pyplot as plt
-from pybullet_api import Fetch
+from pybullet_api import Fetch, Panda
 from utils import *
 import _init_paths
 from mesh_to_sdf.depth_point_cloud import DepthPointCloud
@@ -51,7 +52,7 @@ def pybullet_show_frame(RT):
 
 class SceneReplicaEnv():
 
-    def __init__(self):
+    def __init__(self, robot_name='fetch'):
 
         self._renders = True
         self._egl_render = False
@@ -65,7 +66,7 @@ class SceneReplicaEnv():
         self.root_dir = os.path.dirname(os.path.abspath(__file__))
 
         self.connect()
-        self.reset()
+        self.reset(robot_name)
 
 
     def connect(self):
@@ -95,7 +96,7 @@ class SceneReplicaEnv():
         p.setRealTimeSimulation(0)        
 
 
-    def reset(self):
+    def reset(self, robot_name):
 
         p.resetSimulation()
         p.setTimeStep(self._timeStep)
@@ -104,9 +105,24 @@ class SceneReplicaEnv():
         p.setGravity(0, 0, -9.81)
         p.stepSimulation()
 
-        # set robot 
-        self.robot = Fetch()
+        # set robot
+        if robot_name == 'fetch':
+            base_position = np.zeros((3, ))
+            self.robot = Fetch(base_position)
+        elif robot_name == 'panda':
+            base_position = np.array([-8.81750000e-02, -9.00000000e-04,  1.05706878e+00])
+            self.robot = Panda(base_position)        
         self.robot.retract()
+        input('next?')
+
+        # visualize one link
+        pos, orn = p.getLinkState(self.robot._id, 2)[:2]
+        pose = list(pos) + [orn[3], orn[0], orn[1], orn[2]]
+        RT = unpack_pose(pose)
+        pybullet_show_frame(RT)
+        print(RT[:3, 3])
+
+        input('next?')
 
         # Set table and plane
         self.object_uids = []
@@ -255,6 +271,13 @@ def make_args():
         description="Generate grid and spawn objects", add_help=True
     )
     parser.add_argument(
+        "-r",
+        "--robot",
+        type=str,
+        default="fetch",
+        help="Robot name",
+    )    
+    parser.add_argument(
         "-d",
         "--data_dir",
         type=str,
@@ -275,6 +298,7 @@ def make_args():
 # main function
 if __name__ == '__main__':
     args = make_args()
+    robot_name = args.robot
     data_dir = args.data_dir
     scene_id = args.scene_id
     model_dir = os.path.join(args.data_dir, "models")
@@ -282,28 +306,42 @@ if __name__ == '__main__':
     scenes_path = os.path.join(args.data_dir, "final_scenes", "scene_data")    
 
     # load robot model
-    robot_model_dir = os.path.join(cwd, "robots", "fetch")
-    urdf_filename = os.path.join(robot_model_dir, "fetch.urdf")  
-    param_joints = ['r_wheel_joint', 'l_wheel_joint', 'torso_lift_joint', 'head_pan_joint', 'head_tilt_joint', 
-                    'r_gripper_finger_joint', 'l_gripper_finger_joint', 'bellows_joint']
-    collision_link_names = ["shoulder_pan_link", "shoulder_lift_link", "upperarm_roll_link",
-                  "elbow_flex_link", "forearm_roll_link", "wrist_flex_link", "wrist_roll_link", "gripper_link",
-                  "l_gripper_finger_link", "r_gripper_finger_link"]      
+    robot_model_dir = os.path.join(cwd, "robots", robot_name)
+    urdf_filename = os.path.join(robot_model_dir, f"{robot_name}.urdf")  
+    if robot_name == 'fetch':
+        param_joints = ['r_wheel_joint', 'l_wheel_joint', 'torso_lift_joint', 'head_pan_joint', 'head_tilt_joint', 
+                        'r_gripper_finger_joint', 'l_gripper_finger_joint', 'bellows_joint']
+        collision_link_names = ["shoulder_pan_link", "shoulder_lift_link", "upperarm_roll_link",
+                    "elbow_flex_link", "forearm_roll_link", "wrist_flex_link", "wrist_roll_link", "gripper_link",
+                    "l_gripper_finger_link", "r_gripper_finger_link"]
+        link_ee = "wrist_roll_link"  # end-effector link name
+        link_gripper = 'gripper_link'       
+        arm_len = 1.1
+        arm_height = 1.1 
+    elif robot_name == 'panda':
+        param_joints = ['panda_joint1', 'panda_joint2', 'panda_joint3', 'panda_joint4', 'panda_joint5', 'panda_joint6', 'panda_joint7']
+        collision_link_names = None  # all links
+        link_ee = "panda_hand"     # end-effector link name
+        link_gripper = 'panda_hand'
+        arm_len = 0.9
+        arm_height = 0
+    else:
+        print(f'robot {robot_name} not supported')
+        sys.exit(1)
+
     robot = GTORobotModel(robot_model_dir,
                           urdf_filename=urdf_filename, 
                           time_derivs=[0, 1],  # i.e. joint position/velocity trajectory
                           param_joints=param_joints,
                           collision_link_names=collision_link_names)
-    robot.setup_workspace_field(arm_len=1.1, arm_height=1.1)
-    link_ee = "wrist_roll_link"  # end-effector link name
-    link_gripper = 'gripper_link'
+    robot.setup_workspace_field(arm_len=arm_len, arm_height=arm_height)
 
     # load robot gripper model
-    urdf_filename = os.path.join(robot_model_dir, "fetch_gripper.urdf")
+    urdf_filename = os.path.join(robot_model_dir, f"{robot_name}_gripper.urdf")
     gripper_model = GTORobotModel(robot_model_dir, urdf_filename=urdf_filename)
 
     # create the table environment
-    env = SceneReplicaEnv()
+    env = SceneReplicaEnv(robot_name)
     # add objects
     print(f"-----------Scene: {scene_id}---------------")
     meta_f = "meta-%06d.mat" % scene_id

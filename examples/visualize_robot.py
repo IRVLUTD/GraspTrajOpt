@@ -60,6 +60,7 @@ if __name__ == "__main__":
         euler_degrees=True,
         q=q,
         show_links=True,
+        link_axis_linewidth = 2.0,
         display_link_names=True,
         link_names_alpha=0.4,
     )

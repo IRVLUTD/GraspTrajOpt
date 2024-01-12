@@ -168,6 +168,10 @@ class FixedBaseRobot:
     def q(self):
         return [state[0] for state in p.getJointStates(self._id, self._actuated_joints)]
     
+    
+    def default_pose(self):
+        return np.zeros((self.ndof, ))
+    
 
     def execute_plan(self, plan):
         '''
@@ -176,7 +180,54 @@ class FixedBaseRobot:
         for t in range(plan.shape[1]):
             self.cmd(plan[:, t])
             for _ in range(200):
-                p.stepSimulation()      
+                p.stepSimulation()
+
+    def open_gripper(self):
+        pass
+
+    def close_gripper(self):
+        pass
+
+
+    def retract(self):
+        q = self.default_pose()
+        self.cmd(q)
+        for _ in range(100):
+            p.stepSimulation()
+        self.open_gripper()                
+
+
+class Panda(FixedBaseRobot):
+    def __init__(self, base_position=[0.0] * 3):
+        f = os.path.join(cwd, "robots", "panda", "panda.urdf")
+        self.urdf_filename = f
+        super().__init__(f, base_position=base_position)
+        self.ee_index = 7
+
+    def default_pose(self):
+        # no panda joint 8
+        return np.array([0.0, -1.285, 0, -2.356, 0.0, 1.571, 0.785, 0.04, 0.04])
+    
+    def close_gripper(self):
+        q = self.q()
+        gripper_position = 0
+        start = q[-1]
+        pos = np.linspace(start, gripper_position, num=10)
+        for position in pos:
+            q[-2] = position
+            q[-1] = position
+            self.cmd(q)
+            for _ in range(100):
+                p.stepSimulation()
+
+
+    def open_gripper(self):
+        q = self.q()
+        q[-2] = 0.04
+        q[-1] = 0.04
+        self.cmd(q)
+        for _ in range(100):
+            p.stepSimulation()        
     
 
 class Fetch(FixedBaseRobot):
@@ -208,15 +259,7 @@ class Fetch(FixedBaseRobot):
         # open gripper
         joint_command[12] = 0.05
         joint_command[13] = 0.05        
-        return joint_command          
-
-
-    def retract(self):
-        q = self.default_pose()
-        self.cmd(q)
-        for _ in range(100):
-            p.stepSimulation()
-        self.open_gripper()
+        return joint_command
 
 
     def close_gripper(self):
