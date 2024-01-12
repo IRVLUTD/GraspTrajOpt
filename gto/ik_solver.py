@@ -1,5 +1,5 @@
 # Python standard lib
-import os
+import os, sys
 import pathlib
 from xml.parsers.expat import model
 import numpy as np
@@ -8,6 +8,7 @@ import _init_paths
 # OpTaS
 import optas
 import tf_conversions
+import argparse
 import casadi as cs
 from optas.visualize import Visualizer
 from gto.gto_models import GTORobotModel
@@ -77,8 +78,24 @@ class IKSolver:
         return q, err_pos, err_rot
 
 
+def make_args():
+    parser = argparse.ArgumentParser(
+        description="Generate grid and spawn objects", add_help=True
+    )
+    parser.add_argument(
+        "-r",
+        "--robot",
+        type=str,
+        default="fetch",
+        help="Robot name",
+    )
+    args = parser.parse_args()
+    return args
+
 
 if __name__ == "__main__":
+    args = make_args()
+    robot_name = args.robot
     cwd = pathlib.Path(__file__).parent.resolve()  # path to current working directory
 
     RT = np.array([[-0.05241979, -0.45344928, -0.88973933,  0.41363978],
@@ -87,29 +104,43 @@ if __name__ == "__main__":
         [ 0.,          0.,          0.,          1.        ]])  
 
     # Setup robot
-    model_dir = os.path.join(cwd, "../examples/robots", "fetch")
-    urdf_filename = os.path.join(model_dir, "fetch.urdf")  
+    model_dir = os.path.join(cwd, "../examples/robots", robot_name)
+    urdf_filename = os.path.join(model_dir, f"{robot_name}.urdf")  
 
-    # ['r_wheel_joint', 'l_wheel_joint', 'torso_lift_joint', 'head_pan_joint', 'head_tilt_joint', 'shoulder_pan_joint', 
-    # 'shoulder_lift_joint', 'upperarm_roll_joint', 'elbow_flex_joint', 'forearm_roll_joint', 'wrist_flex_joint', 
-    # 'wrist_roll_joint', 'r_gripper_finger_joint', 'l_gripper_finger_joint', 'bellows_joint']
-    param_joints = ['r_wheel_joint', 'l_wheel_joint', 'torso_lift_joint', 'head_pan_joint', 'head_tilt_joint', 
-                    'r_gripper_finger_joint', 'l_gripper_finger_joint', 'bellows_joint']
+    if robot_name == 'fetch':
+        param_joints = ['r_wheel_joint', 'l_wheel_joint', 'torso_lift_joint', 'head_pan_joint', 'head_tilt_joint', 
+                        'r_gripper_finger_joint', 'l_gripper_finger_joint', 'bellows_joint']
+        collision_link_names = ["shoulder_pan_link", "shoulder_lift_link", "upperarm_roll_link",
+                    "elbow_flex_link", "forearm_roll_link", "wrist_flex_link", "wrist_roll_link", "gripper_link",
+                    "l_gripper_finger_link", "r_gripper_finger_link"]
+        link_ee = "wrist_roll_link"  # end-effector link name
+        link_gripper = 'gripper_link'       
+        arm_len = 1.1
+        arm_height = 1.1 
+    elif robot_name == 'panda':
+        param_joints = ['panda_joint1', 'panda_joint2', 'panda_joint3', 'panda_joint4', 'panda_joint5', 'panda_joint6', 'panda_joint7']
+        collision_link_names = None  # all links
+        link_ee = "panda_hand"     # end-effector link name
+        link_gripper = 'panda_hand'
+        arm_len = 0.9
+        arm_height = 0
+    else:
+        print(f'robot {robot_name} not supported')
+        sys.exit(1)
 
     robot = GTORobotModel(model_dir, urdf_filename=urdf_filename, param_joints=param_joints) 
     robot_name = robot.get_name()
-    link_ee = "wrist_roll_link"  # end-effector link name
-    link_gripper = 'gripper_link'
     print('optimized joint names:', robot.optimized_joint_names)
 
     # solve problem
     ik_solver = IKSolver(robot, link_ee, link_gripper)
     q_0 = np.zeros((robot.ndof, 1), dtype=np.float32)
-    q_0[2, 0] = 0.38
-    q_0[3, 0] = 0.009195
-    q_0[4, 0] = 0.908270
-    q_0[12, 0] = 0.05
-    q_0[13, 0] = 0.05
+    if robot_name == 'fetch':
+        q_0[2, 0] = 0.38
+        q_0[3, 0] = 0.009195
+        q_0[4, 0] = 0.908270
+        q_0[12, 0] = 0.05
+        q_0[13, 0] = 0.05
     q_solution, err_pos, err_rot = ik_solver.solve_ik(q_0, RT)
     lo = robot.lower_actuated_joint_limits.toarray()
     hi = robot.upper_actuated_joint_limits.toarray()
@@ -120,13 +151,13 @@ if __name__ == "__main__":
     vis = Visualizer(camera_position=[3, 2, 4])
     vis.grid_floor()      
 
-    q = [0.05, 0.05]
+    q = [0.0, 0.0]
     position = RT[:3, 3]
     # scalar-last (x, y, z, w) format in optas
     quat = mat2quat(RT[:3, :3])
     orientation = [quat[1], quat[2], quat[3], quat[0]]
     # gripper
-    urdf_filename = os.path.join(model_dir, "fetch_gripper.urdf")
+    urdf_filename = os.path.join(model_dir, f"{robot_name}_gripper.urdf")
     gripper_model = GTORobotModel(model_dir, urdf_filename=urdf_filename)    
     vis.robot(
         gripper_model,

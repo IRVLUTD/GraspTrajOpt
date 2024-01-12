@@ -256,6 +256,33 @@ class SceneReplicaEnv():
         plt.show()
     
 
+def load_grasps(data_dir, robot_name, model):
+
+    if robot_name == 'fetch':
+        # parse grasps
+        grasp_dir = os.path.join(data_dir, "grasp_data", "refined_grasps")
+        grasp_file = os.path.join(grasp_dir, f"fetch_gripper-{model}.json")
+        RT_grasps = parse_grasps(grasp_file)
+    elif robot_name == 'panda':
+        grasp_dir = os.path.join(data_dir, "grasp_data", "panda_simulated")
+        grasp_file = os.path.join(grasp_dir, f"{model}.npy")
+        try:
+            simulator_grasp = np.load(grasp_file, allow_pickle=True)
+            RT_grasps = simulator_grasp.item()["transforms"]
+        except:
+            simulator_grasp = np.load(
+                grasp_file,
+                allow_pickle=True,
+                fix_imports=True,
+                encoding="bytes",
+            )
+            RT_grasps = simulator_grasp.item()[b"transforms"]
+            RT_grasps = ycb_special_case(RT_grasps, model)
+        offset_pose = np.array(rotZ(np.pi / 2))  # and
+        RT_grasps = np.matmul(RT_grasps, offset_pose)  # flip x, y 
+    return RT_grasps  
+
+
 def make_args():
     parser = argparse.ArgumentParser(
         description="Generate grid and spawn objects", add_help=True
@@ -292,7 +319,6 @@ if __name__ == '__main__':
     data_dir = args.data_dir
     scene_id = args.scene_id
     model_dir = os.path.join(args.data_dir, "models")
-    grasp_dir = os.path.join(args.data_dir, "grasp_data", "refined_grasps")
     scenes_path = os.path.join(args.data_dir, "final_scenes", "scene_data")    
 
     # load robot model
@@ -351,7 +377,6 @@ if __name__ == '__main__':
     # start simulation
     env.start()
     time.sleep(3.0)
-    input('next?') 
 
     # Initialize planner
     print('Initialize planner')
@@ -379,8 +404,7 @@ if __name__ == '__main__':
             sdf_cost = depth_pc.get_sdf_cost(robot.workspace_points, epsilon=0.05)
 
             # load grasps
-            grasp_file = os.path.join(grasp_dir, f"fetch_gripper-{object_name}.json")
-            RT_grasps = parse_grasps(grasp_file)
+            RT_grasps = load_grasps(data_dir, robot_name, object_name)
 
             # query object pose
             pos, orn = env.get_object_pose(object_name)
@@ -396,6 +420,25 @@ if __name__ == '__main__':
                 RT_g = RT_grasps[i]
                 RT = RT_obj @ RT_g
                 RT_grasps_base[i] = RT
+
+                # visualize grasps
+                vis = Visualizer(camera_position=[3, 0, 3])
+                vis.grid_floor()
+                vis.points(
+                    depth_pc.points,
+                )
+                q = [0, 0]
+                position = RT[:3, 3]
+                # scalar-last (x, y, z, w) format in optas
+                quat = mat2quat(RT[:3, :3])
+                orientation = [quat[1], quat[2], quat[3], quat[0]]
+                vis.robot(
+                    gripper_model,
+                    base_position=position,
+                    base_orientation=orientation,
+                    q=q
+                )
+                vis.start()
 
                 # check if the grasp is in collision
                 q_user_input = [0.05] * gripper_model.ndof

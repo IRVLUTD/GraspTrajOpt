@@ -14,8 +14,8 @@ def make_args():
         description="Generate grid and spawn objects", add_help=True
     )
     parser.add_argument(
-        "-m",
-        "--model",
+        "-r",
+        "--robot",
         type=str,
         default="fetch",
         help="robot model name",
@@ -26,7 +26,7 @@ def make_args():
 
 if __name__ == "__main__":
     args = make_args()
-    model = args.model
+    model = args.robot
 
     if model == "lwr":
         urdf_filename = os.path.join(cwd, "robots", "kuka_lwr", "kuka_lwr.urdf")
