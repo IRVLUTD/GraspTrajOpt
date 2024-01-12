@@ -62,7 +62,7 @@ class GTORobotModel(RobotModel):
     def setup_fk_functions(self):
         # Setup functions to compute visual origins in global frame
         urdf = self.get_urdf()
-        q = cs.SX.sym("q", self.ndof)
+        q = cs.MX.sym("q", self.ndof)
         link_tf = {}
         visual_tf = {}
         for urdf_link in urdf.links:
