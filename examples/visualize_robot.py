@@ -41,6 +41,11 @@ if __name__ == "__main__":
         print(urdf_filename)
         robot_model = optas.RobotModel(urdf_filename=urdf_filename)
 
+    elif model == "panda":
+        urdf_filename = os.path.join(cwd, "robots", "panda", "panda.urdf")
+        print(urdf_filename)
+        robot_model = optas.RobotModel(urdf_filename=urdf_filename)        
+
     vis = Visualizer(camera_position=[3, 3, 3])
     vis.grid_floor()
     q = robot_model.get_random_joint_positions()
