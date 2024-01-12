@@ -110,19 +110,9 @@ class SceneReplicaEnv():
             base_position = np.zeros((3, ))
             self.robot = Fetch(base_position)
         elif robot_name == 'panda':
-            base_position = np.array([-8.81750000e-02, -9.00000000e-04,  1.05706878e+00])
+            base_position = np.array([0.2, 0, 0.6])
             self.robot = Panda(base_position)        
         self.robot.retract()
-        input('next?')
-
-        # visualize one link
-        pos, orn = p.getLinkState(self.robot._id, 2)[:2]
-        pose = list(pos) + [orn[3], orn[0], orn[1], orn[2]]
-        RT = unpack_pose(pose)
-        pybullet_show_frame(RT)
-        print(RT[:3, 3])
-
-        input('next?')
 
         # Set table and plane
         self.object_uids = []
@@ -360,7 +350,8 @@ if __name__ == '__main__':
         print(obj, position, orientation)
     # start simulation
     env.start()
-    time.sleep(3.0)        
+    time.sleep(3.0)
+    input('next?') 
 
     # Initialize planner
     print('Initialize planner')
