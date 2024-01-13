@@ -1115,7 +1115,6 @@ class Visualizer:
                             scale = geometry.scale
 
                         mesh = o3d.io.read_triangle_mesh(filename, enable_post_processing=True)
-                        print(mesh)
                         if mesh.has_textures:
                             png_texture_filename = filename.replace('.obj', '_uv.png')
                             if not os.path.exists(png_texture_filename):

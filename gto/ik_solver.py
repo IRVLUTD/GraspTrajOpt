@@ -111,19 +111,18 @@ if __name__ == "__main__":
         link_ee = "wrist_roll_link"  # end-effector link name
         link_gripper = 'gripper_link'       
         arm_len = 1.1
-        arm_height = 1.1 
-        base_position = np.array([0, 0, 0])
+        arm_height = 1.1
 
         RT = np.array([[-0.05241979, -0.45344928, -0.88973933,  0.41363978],
             [-0.27383122, -0.8502871,   0.44947574,  0.12551154],
             [-0.96034825,  0.26719978, -0.07959669,  0.97476065],
             [ 0.,          0.,          0.,          1.        ]])
     elif robot_name == 'panda':
-        param_joints = ['panda_hand_joint', 'panda_hand_camera_joint', 'panda_finger_joint1', 'panda_finger_joint2']
+        param_joints = ['panda_finger_joint1', 'panda_finger_joint2']
         collision_link_names = None  # all links
         link_ee = "panda_hand"     # end-effector link name
         link_gripper = 'panda_hand'
-        arm_len = 0.9
+        arm_len = 1.0
         arm_height = 0
 
         RT = np.array([[-0.61162336,  0.79089652,  0.01998741,  0.46388378],
@@ -157,7 +156,7 @@ if __name__ == "__main__":
     vis = Visualizer(camera_position=[3, 2, 4])
     vis.grid_floor()      
 
-    q = [0.0, 0.0]
+    q = [0.05, 0.05]
     position = RT[:3, 3]
     # scalar-last (x, y, z, w) format in optas
     quat = mat2quat(RT[:3, :3])

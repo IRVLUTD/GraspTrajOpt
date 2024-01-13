@@ -288,7 +288,6 @@ if __name__ == '__main__':
     if robot_name == 'fetch':
         param_joints = ['r_wheel_joint', 'l_wheel_joint', 'torso_lift_joint', 'head_pan_joint', 'head_tilt_joint', 
                         'r_gripper_finger_joint', 'l_gripper_finger_joint', 'bellows_joint']
-        param_joints_gripper = []
         collision_link_names = ["shoulder_pan_link", "shoulder_lift_link", "upperarm_roll_link",
                     "elbow_flex_link", "forearm_roll_link", "wrist_flex_link", "wrist_roll_link", "gripper_link",
                     "l_gripper_finger_link", "r_gripper_finger_link"]
@@ -299,8 +298,7 @@ if __name__ == '__main__':
         gripper_open_offsets = [0.05, 0.05]
         base_position = np.array([0.0, 0.0, 0.0])
     elif robot_name == 'panda':
-        param_joints = ['panda_hand_joint', 'panda_hand_camera_joint', 'panda_finger_joint1', 'panda_finger_joint2']
-        param_joints_gripper = ['panda_hand_camera_joint']
+        param_joints = ['panda_finger_joint1', 'panda_finger_joint2']
         collision_link_names = None  # all links
         link_ee = "panda_hand"     # end-effector link name
         link_gripper = 'panda_hand'
@@ -321,7 +319,7 @@ if __name__ == '__main__':
 
     # load robot gripper model
     urdf_filename = os.path.join(robot_model_dir, f"{robot_name}_gripper.urdf")
-    gripper_model = GTORobotModel(robot_model_dir, urdf_filename=urdf_filename, param_joints=param_joints_gripper)
+    gripper_model = GTORobotModel(robot_model_dir, urdf_filename=urdf_filename)
 
     # create the table environment
     env = SceneReplicaEnv(robot_name, base_position)
@@ -416,17 +414,15 @@ if __name__ == '__main__':
             found_ik = np.zeros((n, ), dtype=np.int32)
             q0 = np.array(env.robot.q()).reshape((env.robot.ndof, 1))
             for i in range(n):
-                RT = RT_grasps_world[i]
+                RT = RT_grasps_world[i].copy()
                 # change world to robot base
                 RT[:3, 3] -= base_position
-                print(RT)
-                sys.exit(1)
                 q_solution, err_pos, err_rot = ik_solver.solve_ik(q0, RT)
                 if err_pos < 0.01 and err_rot < 5:
                     found_ik[i] = 1
-            RT_grasps_base = RT_grasps_base[found_ik == 1] 
+            RT_grasps_world = RT_grasps_world[found_ik == 1] 
             print('Among %d grasps, %d found IK' % (n, np.sum(found_ik)))
-            if RT_grasps_base.shape[0] == 0:
+            if RT_grasps_world.shape[0] == 0:
                 continue
 
             # visualize grasps
@@ -435,7 +431,7 @@ if __name__ == '__main__':
             vis.points(
                 depth_pc.points,
             )
-            RT = RT_grasps_base[0]
+            RT = RT_grasps_world[0]
             print(RT)
             position = RT[:3, 3]
             # scalar-last (x, y, z, w) format in optas

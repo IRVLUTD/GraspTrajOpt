@@ -3,6 +3,7 @@ import os
 import sys
 import pathlib
 import numpy as np
+import argparse
 import _init_paths
 import scipy
 
@@ -203,36 +204,67 @@ class GTOPlanner:
         return Q.toarray()
 
 
-def main():
+def make_args():
+    parser = argparse.ArgumentParser(
+        description="Generate grid and spawn objects", add_help=True
+    )
+    parser.add_argument(
+        "-r",
+        "--robot",
+        type=str,
+        default="fetch",
+        help="Robot name",
+    )
+    args = parser.parse_args()
+    return args
 
+
+if __name__ == "__main__":
+    args = make_args()
+    robot_name = args.robot
+    
     cwd = pathlib.Path(__file__).parent.resolve()  # path to current working directory
 
-    RT = np.array([[-0.05241979, -0.45344928, -0.88973933,  0.41363978],
-        [-0.27383122, -0.8502871,   0.44947574,  0.12551154],
-        [-0.96034825,  0.26719978, -0.07959669,  0.97476065],
-        [ 0.,          0.,          0.,          1.        ]])
+    if robot_name == 'fetch':
+        param_joints = ['r_wheel_joint', 'l_wheel_joint', 'torso_lift_joint', 'head_pan_joint', 'head_tilt_joint', 
+                        'r_gripper_finger_joint', 'l_gripper_finger_joint', 'bellows_joint']
+        collision_link_names = ["shoulder_pan_link", "shoulder_lift_link", "upperarm_roll_link",
+                    "elbow_flex_link", "forearm_roll_link", "wrist_flex_link", "wrist_roll_link", "gripper_link",
+                    "l_gripper_finger_link", "r_gripper_finger_link"]
+        link_ee = "wrist_roll_link"  # end-effector link name
+        link_gripper = 'gripper_link'       
+        arm_len = 1.1
+        arm_height = 1.1
+
+        RT = np.array([[-0.05241979, -0.45344928, -0.88973933,  0.41363978],
+            [-0.27383122, -0.8502871,   0.44947574,  0.12551154],
+            [-0.96034825,  0.26719978, -0.07959669,  0.97476065],
+            [ 0.,          0.,          0.,          1.        ]])
+    elif robot_name == 'panda':
+        param_joints = ['panda_finger_joint1', 'panda_finger_joint2']
+        collision_link_names = None  # all links
+        link_ee = "panda_hand"     # end-effector link name
+        link_gripper = 'panda_hand'
+        arm_len = 1.0
+        arm_height = 0
+
+        RT = np.array([[-0.61162336,  0.79089652,  0.01998741,  0.46388378],
+            [ 0.7883297,   0.6071185,   0.09971584, -0.15167381],
+            [ 0.06673018,  0.07674521, -0.99481508,  0.22877409],
+            [ 0.,          0.,          0.,          1.        ]]) 
+    else:
+        print(f'robot {robot_name} not supported')
+        sys.exit(1)    
 
     # Setup robot
-    model_dir = os.path.join(cwd, "../examples/robots", "fetch")
-    urdf_filename = os.path.join(model_dir, "fetch.urdf")  
-
-    # ['r_wheel_joint', 'l_wheel_joint', 'torso_lift_joint', 'head_pan_joint', 'head_tilt_joint', 'shoulder_pan_joint', 
-    # 'shoulder_lift_joint', 'upperarm_roll_joint', 'elbow_flex_joint', 'forearm_roll_joint', 'wrist_flex_joint', 
-    # 'wrist_roll_joint', 'r_gripper_finger_joint', 'l_gripper_finger_joint', 'bellows_joint']
-    param_joints = ['r_wheel_joint', 'l_wheel_joint', 'torso_lift_joint', 'head_pan_joint', 'head_tilt_joint', 
-                    'r_gripper_finger_joint', 'l_gripper_finger_joint', 'bellows_joint']
-    
-    collision_link_names = ["shoulder_pan_link", "shoulder_lift_link", "upperarm_roll_link",
-                  "elbow_flex_link", "forearm_roll_link", "wrist_flex_link", "wrist_roll_link", "gripper_link",
-                  "l_gripper_finger_link", "r_gripper_finger_link"]    
+    model_dir = os.path.join(cwd, "../examples/robots", robot_name)
+    urdf_filename = os.path.join(model_dir, f"{robot_name}.urdf") 
 
     robot = GTORobotModel(model_dir, urdf_filename=urdf_filename, 
                         time_derivs=[0, 1],  # i.e. joint position/velocity trajectory
                         param_joints=param_joints,
                         collision_link_names=collision_link_names)
-    robot.setup_workspace_field(arm_len=1.1, arm_height=1.1)    
-    link_ee = "wrist_roll_link"  # end-effector link name
-    link_gripper = 'gripper_link'
+    robot.setup_workspace_field(arm_len=arm_len, arm_height=arm_height)
     print('optimized joint names:', robot.optimized_joint_names)
 
     # Initialize planner
@@ -254,7 +286,7 @@ def main():
     quat = mat2quat(RT[:3, :3])
     orientation = [quat[1], quat[2], quat[3], quat[0]]
     # gripper
-    urdf_filename = os.path.join(model_dir, "fetch_gripper.urdf")
+    urdf_filename = os.path.join(model_dir, f"{robot_name}_gripper.urdf")
     gripper = GTORobotModel(model_dir, urdf_filename=urdf_filename)    
     vis.robot(
         gripper,
@@ -269,10 +301,4 @@ def main():
     if index[-1] != n - 1:
         index += [n - 1]
     vis.robot_traj(robot, plan[:, index], alpha_spec={'style': 'A'})
-    vis.start()       
-
-    return 0
-
-
-if __name__ == "__main__":
-    sys.exit(main())
+    vis.start()

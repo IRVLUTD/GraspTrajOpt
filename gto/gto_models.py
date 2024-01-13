@@ -161,7 +161,7 @@ if __name__ == "__main__":
         arm_len = 1.1
         arm_height = 1.1         
     elif robot_name == 'panda':
-        param_joints = ['panda_joint1', 'panda_joint2', 'panda_joint3', 'panda_joint4', 'panda_joint5', 'panda_joint6', 'panda_joint7']
+        param_joints = ['panda_finger_joint1', 'panda_finger_joint2']
         collision_link_names = None  # all links
         link_ee = "panda_hand"     # end-effector link name
         link_gripper = 'panda_hand'
