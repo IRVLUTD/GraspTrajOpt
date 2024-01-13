@@ -9,13 +9,12 @@ import scipy
 
 # OpTaS
 import optas
-import tf_conversions
 import casadi as cs
 from optas.visualize import Visualizer
 from optas.spatialmath import standoff
 from gto.gto_models import GTORobotModel
 from transforms3d.quaternions import mat2quat
-from optas.spatialmath import Quaternion, standoff
+from optas.spatialmath import standoff
 from utils import *
 
 
@@ -50,7 +49,7 @@ class GTOPlanner:
             "qc", self.robot.ndof
         )  # current robot joint configuration
         # goal pose of the gripper link_ee
-        tf_goal = builder.add_parameter("tf_goal", 7, goal_size)
+        tf_goal = builder.add_parameter("tf_goal", 16, goal_size)
         # sdf field
         sdf_cost = builder.add_parameter("sdf_cost", self.robot.field_size)
 
@@ -91,8 +90,7 @@ class GTOPlanner:
             points_standoff = tf_standoff[:3, :3] @ self.gripper_points.T + tf_standoff[:3, 3].reshape((3, 1))
         cost = cs.MX.zeros(goal_size)
         for i in range(goal_size):
-            quat = Quaternion(tf_goal[3, i], tf_goal[4, i], tf_goal[5, i], tf_goal[6, i])
-            tf_g = quat.getT(tf_goal[0, i], tf_goal[1, i], tf_goal[2, i])
+            tf_g = tf_goal[:, i].reshape((4, 4)).T
             tf_gripper_goal = tf_g @ self.gripper_tf(Q[:, self.T - 1])
             points_tf_goal = tf_gripper_goal[:3, :3] @ self.gripper_points.T + tf_gripper_goal[:3, 3].reshape((3, 1))
             # standoff
@@ -135,11 +133,8 @@ class GTOPlanner:
 
     def plan(self, qc, RT, sdf_cost, use_standoff=False):
         self.setup_optimization(goal_size=1, use_standoff=use_standoff)
-        tf_goal = np.zeros((7, 1))
-        quat = mat2quat(RT[:3, :3])
-        orientation = [quat[1], quat[2], quat[3], quat[0]]
-        tf_goal[:3, 0] = RT[:3, 3]
-        tf_goal[3:, 0] = orientation
+        tf_goal = np.zeros((16, 1))
+        tf_goal[:, 0] = RT.flatten()
 
         # Set initial seed, note joint velocity will be set to zero
         Q0 = optas.diag(qc) @ optas.DM.ones(self.robot.ndof, self.T)
@@ -212,7 +207,7 @@ def make_args():
         "-r",
         "--robot",
         type=str,
-        default="fetch",
+        default="panda",
         help="Robot name",
     )
     args = parser.parse_args()
@@ -239,7 +234,8 @@ if __name__ == "__main__":
         RT = np.array([[-0.05241979, -0.45344928, -0.88973933,  0.41363978],
             [-0.27383122, -0.8502871,   0.44947574,  0.12551154],
             [-0.96034825,  0.26719978, -0.07959669,  0.97476065],
-            [ 0.,          0.,          0.,          1.        ]])
+            [ 0.,          0.,          0.,          1.        ]])     
+
     elif robot_name == 'panda':
         param_joints = ['panda_finger_joint1', 'panda_finger_joint2']
         collision_link_names = None  # all links
@@ -252,6 +248,7 @@ if __name__ == "__main__":
             [ 0.7883297,   0.6071185,   0.09971584, -0.15167381],
             [ 0.06673018,  0.07674521, -0.99481508,  0.22877409],
             [ 0.,          0.,          0.,          1.        ]]) 
+        
     else:
         print(f'robot {robot_name} not supported')
         sys.exit(1)    
@@ -275,6 +272,12 @@ if __name__ == "__main__":
     qc = default_pose(robot)
     plan = planner.plan(qc, RT, sdf_cost)
     print(plan.shape)
+
+    lo = robot.lower_actuated_joint_limits.toarray()
+    hi = robot.upper_actuated_joint_limits.toarray()
+    print('last step')
+    for i in range(robot.ndof):
+        print(f'joint {i} {robot.actuated_joint_names[i]}: {lo[i]} <= {plan[i, -1]} <= {hi[i]}')
 
     # visualization
     vis = Visualizer(camera_position=[3, 0, 3])
