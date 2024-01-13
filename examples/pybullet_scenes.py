@@ -97,6 +97,7 @@ class SceneReplicaEnv():
         z_offset = 0
         self.table_pos = np.array([0.8, 0, z_offset])
         self.table_id = p.loadURDF(table_file, self.table_pos)
+        self.table_height = 0.75
         self.light_position = np.array([-1.0, 0, 2.5])
 
 
@@ -131,14 +132,19 @@ class SceneReplicaEnv():
         idx = self.object_uids[self.object_names.index(object_name)]
         p.resetBasePositionAndOrientation(
             idx,
-            [0, 1, 0],
+            [0, 1, 0.1],
             [0, 0, 0, 1],
         )
 
 
     def get_object_pose(self, name):
         index = self.object_names.index(name)
-        return p.getBasePositionAndOrientation(self.object_uids[index])     
+        return p.getBasePositionAndOrientation(self.object_uids[index])
+
+
+    def set_object_pose(self, name, pos, orn):
+        idx = self.object_uids[self.object_names.index(name)]
+        p.resetBasePositionAndOrientation(idx, pos, orn)        
 
 
     def get_camera_view(self):
@@ -240,6 +246,18 @@ class SceneReplicaEnv():
         self.robot.cmd(action)
         for _ in range(400):
             p.stepSimulation()
+
+
+    def compute_reward(self, object_name):
+        """Calculates the reward for the episode.
+
+        The reward is 1 if one of the objects is above height
+        """
+        reward = 0
+        pos, _ = self.get_object_pose(object_name)
+        if pos[2] > self.table_height + 0.2:
+            reward = 1
+        return reward            
 
 
     def retract(self):
@@ -384,6 +402,7 @@ if __name__ == '__main__':
         orientation = [quat[1], quat[2], quat[3], quat[0]]
         env.place_objects(filename, obj, position, orientation)
         print(obj, position, orientation)
+        meta_poses[obj] = [position, orientation]
     # start simulation
     env.start()
     time.sleep(1.0)
@@ -397,9 +416,16 @@ if __name__ == '__main__':
     for ordering in ["nearest_first", "random"]:
         object_order = meta[ordering][0].split(",")
         print(ordering, object_order)
+        
         # for each object
+        set_objects = set(object_order)
         for object_name in object_order:
             print(object_name)
+
+            # reset scene
+            for obj in set_objects:
+                pos, orn = meta_poses[obj]
+                env.set_object_pose(obj, pos, orn)
                                           
             # render image and compute sdf cost field
             rgba, depth, mask, cam_pose, intrinsic_matrix = env.get_observation()
@@ -449,6 +475,7 @@ if __name__ == '__main__':
             RT_grasps_world = RT_grasps_world[in_collision == 0] 
             print('Among %d grasps, %d in collision, %d collision-free' % (n, np.sum(in_collision), RT_grasps_world.shape[0]))
             if RT_grasps_world.shape[0] == 0:
+                set_objects.remove(object_name)
                 continue           
 
             # test IK for remaining grasps
@@ -468,6 +495,7 @@ if __name__ == '__main__':
             RT_grasps_base = RT_grasps_base[found_ik == 1] 
             print('Among %d grasps, %d found IK' % (n, np.sum(found_ik)))
             if RT_grasps_world.shape[0] == 0:
+                set_objects.remove(object_name)
                 continue
 
             # plan to a grasp set
@@ -504,6 +532,9 @@ if __name__ == '__main__':
             env.robot.close_gripper()
             time.sleep(1.0)
             env.retract()
+            reward = env.compute_reward(object_name)
+            print('reward:', reward)
             # retract
             env.reset_objects(object_name)
             env.robot.retract()
+            set_objects.remove(object_name)

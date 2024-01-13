@@ -277,7 +277,7 @@ class Panda(FixedBaseRobot):
         q[-2] = 0
         q[-1] = 0
         self.cmd(q)
-        for _ in range(100):
+        for _ in range(1000):
             p.stepSimulation()
 
     def open_gripper(self):
