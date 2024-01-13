@@ -169,16 +169,16 @@ def standoff(offset: ArrayType, axis: str = "x") -> CasADiArrayType:
         )
     elif axis == 'y':
         return cs.vertcat(
-            cs.horzcat(1.0, 0.0, 0.0, 0.0),
-            cs.DM([[0.0, 1.0, 0.0, offset]]),
+            cs.DM([[1.0, 0.0, 0.0, 0.0]]),
+            cs.horzcat(0.0, 1.0, 0.0, offset),
             cs.DM([[0.0, 0.0, 1.0, 0.0]]),
             cs.DM([[0.0, 0.0, 0.0, 1.0]]),
         )
     elif axis == 'z':
         return cs.vertcat(
-            cs.horzcat(1.0, 0.0, 0.0, 0.0),
+            cs.DM([[1.0, 0.0, 0.0, 0.0]]),
             cs.DM([[0.0, 1.0, 0.0, 0.0]]),
-            cs.DM([[0.0, 0.0, 1.0, offset]]),
+            cs.horzcat(0.0, 0.0, 1.0, offset),
             cs.DM([[0.0, 0.0, 0.0, 1.0]]),
         )
 

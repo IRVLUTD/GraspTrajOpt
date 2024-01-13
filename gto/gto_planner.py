@@ -165,7 +165,7 @@ class GTOPlanner:
         self.setup_optimization(use_standoff, axis_standoff)
 
         n = RTs.shape[0]
-        self.setup_optimization(goal_size=n, use_standoff=True)
+        self.setup_optimization(goal_size=n, use_standoff=use_standoff, axis_standoff=axis_standoff)
         tf_goal = np.zeros((16, n))
         for i in range(n):
             RT = RTs[i]

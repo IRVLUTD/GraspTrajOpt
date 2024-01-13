@@ -83,7 +83,7 @@ class SceneReplicaEnv():
             self.robot = Fetch(base_position)
         elif robot_name == 'panda':
             self.robot = Panda(base_position)        
-        self.robot.retract()
+        self.robot.retract()    
 
         # Set table and plane
         self.object_uids = []
@@ -115,7 +115,25 @@ class SceneReplicaEnv():
         uid = self._add_mesh(urdf_filename, position, orientation)  # xyzw
         self.object_uids.append(uid)
         self.object_names.append(name)
-        p.resetBaseVelocity(uid, (0.0, 0.0, 0.0), (0.0, 0.0, 0.0))
+        # p.resetBaseVelocity(uid, (0.0, 0.0, 0.0), (0.0, 0.0, 0.0))
+        p.changeDynamics(
+            uid,
+            -1,
+            restitution=0.1,
+            mass=0.1,
+            spinningFriction=1.0,
+            rollingFriction=1.0,
+            lateralFriction=1.0,
+        )
+
+
+    def reset_objects(self, object_name):
+        idx = self.object_uids[self.object_names.index(object_name)]
+        p.resetBasePositionAndOrientation(
+            idx,
+            [0, 1, 0],
+            [0, 0, 0, 1],
+        )
 
 
     def get_object_pose(self, name):
@@ -216,6 +234,29 @@ class SceneReplicaEnv():
         ax.set_title('3D ploud cloud in robot base')   
         set_axes_equal(ax)                    
         plt.show()
+
+
+    def step(self, action):
+        self.robot.cmd(action)
+        for _ in range(400):
+            p.stepSimulation()
+
+
+    def retract(self):
+        """Retract step."""
+        qc = self.robot.q()
+        # keep gripper closed
+        for idx in self.robot.finger_index:
+            qc[idx] = 0        
+
+        self.step(qc)  # grasp
+        pos, orn = p.getLinkState(self.robot._id, self.robot.ee_index)[:2]
+        for i in range(10):
+            pos = (pos[0], pos[1], pos[2] + 0.03)
+            jointPoses = np.array(p.calculateInverseKinematics(self.robot._id, self.robot.ee_index, pos))
+            for idx in self.robot.finger_index:
+                jointPoses[idx] = 0.0
+            self.step(jointPoses.tolist())
     
 
 def load_grasps(data_dir, robot_name, model):
@@ -279,7 +320,7 @@ if __name__ == '__main__':
     robot_name = args.robot
     data_dir = args.data_dir
     scene_id = args.scene_id
-    model_dir = os.path.join(args.data_dir, "models")
+    model_dir = os.path.join(args.data_dir, "objects")
     scenes_path = os.path.join(args.data_dir, "final_scenes", "scene_data")    
 
     # load robot model
@@ -335,9 +376,9 @@ if __name__ == '__main__':
     meta_poses = {}
     for i, obj in enumerate(meta_obj_names):
         obj = obj.strip()
-        filename = os.path.join(model_dir, obj, f'{obj}.urdf')
+        filename = os.path.join(model_dir, obj, f'model_normalized.urdf')
         position = meta["poses"][i][:3]
-        position[2] += 0.04
+        position[2] += 0.02
         quat = meta["poses"][i][3:]
         # scalar-last (x, y, z, w) format in optas
         orientation = [quat[1], quat[2], quat[3], quat[0]]
@@ -345,7 +386,7 @@ if __name__ == '__main__':
         print(obj, position, orientation)
     # start simulation
     env.start()
-    time.sleep(3.0)
+    time.sleep(1.0)
 
     # Initialize planner
     print('Initialize planner')
@@ -434,11 +475,11 @@ if __name__ == '__main__':
             plan = planner.plan_goalset(qc, RT_grasps_base, sdf_cost, use_standoff=True, axis_standoff=axis_standoff)
 
             # visualize grasps
-            vis = Visualizer(camera_position=[3, 0, 3])
-            vis.grid_floor()
-            vis.points(
-                depth_pc.points,
-            )
+            # vis = Visualizer(camera_position=[3, 0, 3])
+            # vis.grid_floor()
+            # vis.points(
+            #     depth_pc.points,
+            # )
             # q = [0, 0]
             # position = RT[:3, 3]
             # # scalar-last (x, y, z, w) format in optas
@@ -452,24 +493,17 @@ if __name__ == '__main__':
             # )
             # robot trajectory
             # sample plan
-            n = plan.shape[1]
-            index = list(range(0, n, 10))
-            if index[-1] != n - 1:
-                index += [n - 1]
-            vis.robot_traj(robot, plan[:, index], base_position, alpha_spec={'style': 'A'})
-            vis.start()
+            # n = plan.shape[1]
+            # index = list(range(0, n, 10))
+            # if index[-1] != n - 1:
+            #     index += [n - 1]
+            # vis.robot_traj(robot, plan[:, index], base_position, alpha_spec={'style': 'A'})
+            # vis.start()
 
             env.robot.execute_plan(plan)
-            time.sleep(1.0)
             env.robot.close_gripper()
-            # list object
-            # gipper pose
-            pos, orn = p.getLinkState(env.robot._id, env.robot.ee_index)[:2]
-            pose = list(pos) + [orn[3], orn[0], orn[1], orn[2]]
-            pose_mat = unpack_pose(pose)
-            pose_mat[2, 3] += 0.4
-            qc = env.robot.q()
-            plan = planner.plan(qc, pose_mat, sdf_cost)
-            env.robot.execute_plan(plan)
+            time.sleep(1.0)
+            env.retract()
             # retract
+            env.reset_objects(object_name)
             env.robot.retract()

@@ -170,10 +170,14 @@ class FixedBaseRobot:
         self.ndof = len(self._actuated_joints)
         self.robot = optas.RobotModel(urdf_filename, time_derivs=[0])
 
+        self.position_control_gain_p = [0.01] * self.ndof
+        self.position_control_gain_d = [1.0] * self.ndof
+        self.max_torque = [1000] * self.ndof
+
     def reset(self, q):
         for j, idx in enumerate(self._actuated_joints):
             qj = q[j]
-            p.resetJointState(self._id, idx, qj)
+            p.resetJointState(self._id, idx, qj)           
 
     def cmd(self, q):
         p.setJointMotorControlArray(
@@ -181,6 +185,9 @@ class FixedBaseRobot:
             self._actuated_joints,
             p.POSITION_CONTROL,
             targetPositions=np.asarray(q).tolist(),
+            forces=self.max_torque,
+            positionGains=self.position_control_gain_p,
+            velocityGains=self.position_control_gain_d,
         )     
 
     def cmd_torque(self, taus):
@@ -196,19 +203,21 @@ class FixedBaseRobot:
 
     def q(self):
         return [state[0] for state in p.getJointStates(self._id, self._actuated_joints)]
-    
-    
+
     def default_pose(self):
         return np.zeros((self.ndof, ))
     
-
     def execute_plan(self, plan):
         '''
         @ param plan: shape (ndof, T)
         '''        
         for t in range(plan.shape[1]):
             self.cmd(plan[:, t])
-            for _ in range(200):
+            if t >= plan.shape[1] - 5:
+                num = 500
+            else:
+                num = 200
+            for _ in range(num):
                 p.stepSimulation()
 
     def open_gripper(self):
@@ -217,11 +226,10 @@ class FixedBaseRobot:
     def close_gripper(self):
         pass
 
-
     def retract(self):
         q = self.default_pose()
         self.cmd(q)
-        for _ in range(100):
+        for _ in range(1000):
             p.stepSimulation()
         self.open_gripper()
 
@@ -246,6 +254,7 @@ class Panda(FixedBaseRobot):
         self.ee_index = 7
         self.camera_link_index = 10
         self.gripper_open_offsets = [0.04, 0.04]
+        self.finger_index = [7, 8]         
 
     def default_pose(self):
         # no panda joint 8
@@ -265,15 +274,11 @@ class Panda(FixedBaseRobot):
     
     def close_gripper(self):
         q = self.q()
-        gripper_position = 0
-        start = q[-1]
-        pos = np.linspace(start, gripper_position, num=10)
-        for position in pos:
-            q[-2] = position
-            q[-1] = position
-            self.cmd(q)
-            for _ in range(100):
-                p.stepSimulation()
+        q[-2] = 0
+        q[-1] = 0
+        self.cmd(q)
+        for _ in range(100):
+            p.stepSimulation()
 
     def open_gripper(self):
         q = self.q()
@@ -292,6 +297,7 @@ class Fetch(FixedBaseRobot):
         self.ee_index = 16
         self.camera_link_index = 7
         self.gripper_open_joints = [0.05, 0.05]
+        self.finger_index = [12, 13]
 
     def default_pose(self):
         # set robot pose
@@ -324,23 +330,18 @@ class Fetch(FixedBaseRobot):
         # z backward
         RT = cam_pose_mat.dot(rotX(-np.pi))
         # show frame for debugging
-        pybullet_show_frame(cam_pose_mat)
-        input('next?')
+        # pybullet_show_frame(cam_pose_mat)
         cam_view_matrix = se3_inverse(RT).T.flatten().tolist()
         return cam_view_matrix, cam_pose_mat
 
 
     def close_gripper(self):
         q = self.q()
-        gripper_position = 0
-        start = q[12]
-        pos = np.linspace(start, gripper_position, num=10)
-        for position in pos:
-            q[12] = position
-            q[13] = position
-            self.cmd(q)
-            for _ in range(100):
-                p.stepSimulation()
+        q[12] = 0
+        q[13] = 0
+        self.cmd(q)
+        for _ in range(100):
+            p.stepSimulation()
 
 
     def open_gripper(self):
