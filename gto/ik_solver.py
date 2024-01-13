@@ -98,11 +98,6 @@ if __name__ == "__main__":
     robot_name = args.robot
     cwd = pathlib.Path(__file__).parent.resolve()  # path to current working directory
 
-    RT = np.array([[-0.05241979, -0.45344928, -0.88973933,  0.41363978],
-        [-0.27383122, -0.8502871,   0.44947574,  0.12551154],
-        [-0.96034825,  0.26719978, -0.07959669,  0.97476065],
-        [ 0.,          0.,          0.,          1.        ]])  
-
     # Setup robot
     model_dir = os.path.join(cwd, "../examples/robots", robot_name)
     urdf_filename = os.path.join(model_dir, f"{robot_name}.urdf")  
@@ -117,13 +112,24 @@ if __name__ == "__main__":
         link_gripper = 'gripper_link'       
         arm_len = 1.1
         arm_height = 1.1 
+        base_position = np.array([0, 0, 0])
+
+        RT = np.array([[-0.05241979, -0.45344928, -0.88973933,  0.41363978],
+            [-0.27383122, -0.8502871,   0.44947574,  0.12551154],
+            [-0.96034825,  0.26719978, -0.07959669,  0.97476065],
+            [ 0.,          0.,          0.,          1.        ]])
     elif robot_name == 'panda':
-        param_joints = ['panda_joint1', 'panda_joint2', 'panda_joint3', 'panda_joint4', 'panda_joint5', 'panda_joint6', 'panda_joint7']
+        param_joints = ['panda_hand_joint', 'panda_hand_camera_joint', 'panda_finger_joint1', 'panda_finger_joint2']
         collision_link_names = None  # all links
         link_ee = "panda_hand"     # end-effector link name
         link_gripper = 'panda_hand'
         arm_len = 0.9
         arm_height = 0
+
+        RT = np.array([[-0.61162336,  0.79089652,  0.01998741,  0.46388378],
+            [ 0.7883297,   0.6071185,   0.09971584, -0.15167381],
+            [ 0.06673018,  0.07674521, -0.99481508,  0.22877409],
+            [ 0.,          0.,          0.,          1.        ]]) 
     else:
         print(f'robot {robot_name} not supported')
         sys.exit(1)

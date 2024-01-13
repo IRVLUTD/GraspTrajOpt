@@ -1,5 +1,6 @@
-import dis
-import os
+import os, sys
+import argparse
+from turtle import color
 import _init_paths
 import mesh_to_sdf
 import pathlib
@@ -130,27 +131,64 @@ class GTORobotModel(RobotModel):
         return offsets
 
 
+def make_args():
+    parser = argparse.ArgumentParser(
+        description="Generate grid and spawn objects", add_help=True
+    )
+    parser.add_argument(
+        "-r",
+        "--robot",
+        type=str,
+        default="fetch",
+        help="Robot name",
+    )
+    args = parser.parse_args()
+    return args
+
+
 if __name__ == "__main__":
+    args = make_args()
+    robot_name = args.robot
 
-    collision_link_names = ["shoulder_pan_link", "shoulder_lift_link", "upperarm_roll_link",
-                  "elbow_flex_link", "forearm_roll_link", "wrist_flex_link", "wrist_roll_link", "gripper_link",
-                  "l_gripper_finger_link", "r_gripper_finger_link"]
-    param_joints = ['r_wheel_joint', 'l_wheel_joint', 'torso_lift_joint', 'head_pan_joint', 'head_tilt_joint', 
-                    'r_gripper_finger_joint', 'l_gripper_finger_joint', 'bellows_joint']     
+    if robot_name == 'fetch':
+        collision_link_names = ["shoulder_pan_link", "shoulder_lift_link", "upperarm_roll_link",
+                    "elbow_flex_link", "forearm_roll_link", "wrist_flex_link", "wrist_roll_link", "gripper_link",
+                    "l_gripper_finger_link", "r_gripper_finger_link"]
+        param_joints = ['r_wheel_joint', 'l_wheel_joint', 'torso_lift_joint', 'head_pan_joint', 'head_tilt_joint', 
+                        'r_gripper_finger_joint', 'l_gripper_finger_joint', 'bellows_joint']
+        link_ee = "wrist_roll_link"  # end-effector link name
+        link_gripper = 'gripper_link'       
+        arm_len = 1.1
+        arm_height = 1.1         
+    elif robot_name == 'panda':
+        param_joints = ['panda_joint1', 'panda_joint2', 'panda_joint3', 'panda_joint4', 'panda_joint5', 'panda_joint6', 'panda_joint7']
+        collision_link_names = None  # all links
+        link_ee = "panda_hand"     # end-effector link name
+        link_gripper = 'panda_hand'
+        arm_len = 1.0
+        arm_height = 0
+    else:
+        print(f'robot {robot_name} not supported')
+        sys.exit(1)          
 
-    model_dir = os.path.join(cwd, "../examples/robots", "fetch")
-    urdf_filename = os.path.join(model_dir, "fetch.urdf")
+    model_dir = os.path.join(cwd, "../examples/robots", robot_name)
+    urdf_filename = os.path.join(model_dir, f"{robot_name}.urdf")
     robot_model = GTORobotModel(model_dir, urdf_filename=urdf_filename, 
                                 param_joints=param_joints, collision_link_names=None)
-    robot_model.setup_workspace_field(arm_len=1.1, arm_height=1.1)
+    robot_model.setup_workspace_field(arm_len=arm_len, arm_height=arm_height)
 
     # forward kinematics
     q_user_input = [0.0] * robot_model.ndof
-    q_user_input[2] = 0.4
+    if robot_name == 'fetch':
+        q_user_input[2] = 0.4
     points_base_all, normals_base_all = robot_model.compute_fk_surface_points(q_user_input)
 
     # show points
     scene = pyrender.Scene()
-    scene.add(pyrender.Mesh.from_points(points_base_all, normals=normals_base_all))
-    scene.add(pyrender.Mesh.from_points(robot_model.workspace_points))
+    colors = np.zeros(points_base_all.shape)
+    colors[:, 0] = 1
+    scene.add(pyrender.Mesh.from_points(points_base_all, normals=normals_base_all, colors=colors))
+    n = robot_model.workspace_points.shape[0]
+    index = np.random.permutation(n)[:10000]
+    scene.add(pyrender.Mesh.from_points(robot_model.workspace_points[index]))
     pyrender.Viewer(scene, use_raymond_lighting=True, point_size=2)

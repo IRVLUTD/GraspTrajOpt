@@ -22,37 +22,9 @@ import pathlib
 cwd = pathlib.Path(__file__).parent.resolve()  # path to current working directory
 
 
-def pybullet_show_frame(RT):
-
-    origin = RT[:3, 3]
-    frame = np.eye(3)
-    frame_new = RT[:3, :3] @ frame + origin.reshape((3, 1))
-
-    x_axis = p.addUserDebugLine(lineFromXYZ = origin,
-                            lineToXYZ = frame_new[:, 0],
-                            lineColorRGB = [1, 0, 0],
-                            lineWidth = 0.1,
-                            lifeTime = 0
-                            )    
-
-    y_axis = p.addUserDebugLine(lineFromXYZ = origin,
-                            lineToXYZ = frame_new[:, 1],
-                            lineColorRGB = [0, 1, 0],
-                            lineWidth = 0.1,
-                            lifeTime = 0
-                            )
-    
-    z_axis = p.addUserDebugLine(lineFromXYZ = origin,
-                            lineToXYZ = frame_new[:, 2],
-                            lineColorRGB = [0, 0, 1],
-                            lineWidth = 0.1,
-                            lifeTime = 0
-                            )    
-
-
 class SceneReplicaEnv():
 
-    def __init__(self, robot_name='fetch'):
+    def __init__(self, robot_name='fetch', base_position=[0, 0, 0]):
 
         self._renders = True
         self._egl_render = False
@@ -66,7 +38,7 @@ class SceneReplicaEnv():
         self.root_dir = os.path.dirname(os.path.abspath(__file__))
 
         self.connect()
-        self.reset(robot_name)
+        self.reset(robot_name, base_position)
 
 
     def connect(self):
@@ -96,7 +68,7 @@ class SceneReplicaEnv():
         p.setRealTimeSimulation(0)        
 
 
-    def reset(self, robot_name):
+    def reset(self, robot_name, base_position):
 
         p.resetSimulation()
         p.setTimeStep(self._timeStep)
@@ -110,7 +82,6 @@ class SceneReplicaEnv():
             base_position = np.zeros((3, ))
             self.robot = Fetch(base_position)
         elif robot_name == 'panda':
-            base_position = np.array([0.2, 0, 0.6])
             self.robot = Panda(base_position)        
         self.robot.retract()
 
@@ -154,40 +125,31 @@ class SceneReplicaEnv():
 
     def get_camera_view(self):
         """
-        Get head camera view
+        Get camera view from the robot
         """
-        head_camera_rgb_optical_frame = 7
-        pos, orn = p.getLinkState(self.robot._id, head_camera_rgb_optical_frame)[:2]
-        cam_pose = list(pos) + [orn[3], orn[0], orn[1], orn[2]]
-        cam_pose_mat = unpack_pose(cam_pose)
+        cam_view_matrix, cam_pose = self.robot.get_camera_pose()     
 
         fov = 45
         aspect = float(self._window_width) / (self._window_height)
-        head_near = 0.1
-        head_far = 10
-        head_proj_matrix = p.computeProjectionMatrixFOV(
-            fov, aspect, head_near, head_far
+        z_near = 0.1
+        z_far = 10
+        proj_matrix = p.computeProjectionMatrixFOV(
+            fov, aspect, z_near, z_far
         )
-
-        # z backward
-        RT = cam_pose_mat.dot(rotX(-np.pi))
-        # show frame for debugging
-        # pybullet_show_frame(RT)
-        head_cam_view_matrix = se3_inverse(RT).T.flatten().tolist()
 
         lightDistance = 2.0
         light_position = np.array([-1.0, 0, 2.5])
         lightDirection = self.table_pos - light_position
         lightColor = np.array([1.0, 1.0, 1.0])
         return (
-            head_cam_view_matrix,
-            head_proj_matrix,
+            cam_view_matrix,
+            proj_matrix,
             lightDistance,
             lightColor,
             lightDirection,
-            head_near,
-            head_far,
-            cam_pose_mat,
+            z_near,
+            z_far,
+            cam_pose,
         )            
 
 
@@ -197,8 +159,8 @@ class SceneReplicaEnv():
         """
 
         (
-            head_cam_view_matrix,
-            head_proj_matrix,
+            cam_view_matrix,
+            proj_matrix,
             lightDistance,
             lightColor,
             lightDirection,
@@ -209,8 +171,8 @@ class SceneReplicaEnv():
 
         _, _, rgba, depth, mask = p.getCameraImage(width=self._window_width,
                                                    height=self._window_height,
-                                                   viewMatrix=head_cam_view_matrix,
-                                                   projectionMatrix=head_proj_matrix,
+                                                   viewMatrix=cam_view_matrix,
+                                                   projectionMatrix=proj_matrix,
                                                    lightDirection = lightDirection,
                                                    lightColor=lightColor,
                                                    lightDistance=lightDistance,
@@ -219,7 +181,7 @@ class SceneReplicaEnv():
         
         # transform depth from NDC to actual depth        
         depth = far * near / (far - (far - near) * depth)
-        intrinsic_matrix = projection_to_intrinsics(head_proj_matrix, self._window_width, self._window_height)
+        intrinsic_matrix = projection_to_intrinsics(proj_matrix, self._window_width, self._window_height)
         # self.visualize_data(rgba, depth, mask, depth_pc)
         return rgba, depth, mask, cam_pose, intrinsic_matrix
 
@@ -277,7 +239,6 @@ def load_grasps(data_dir, robot_name, model):
                 encoding="bytes",
             )
             RT_grasps = simulator_grasp.item()[b"transforms"]
-            RT_grasps = ycb_special_case(RT_grasps, model)
         offset_pose = np.array(rotZ(np.pi / 2))  # and
         RT_grasps = np.matmul(RT_grasps, offset_pose)  # flip x, y 
     return RT_grasps  
@@ -327,20 +288,26 @@ if __name__ == '__main__':
     if robot_name == 'fetch':
         param_joints = ['r_wheel_joint', 'l_wheel_joint', 'torso_lift_joint', 'head_pan_joint', 'head_tilt_joint', 
                         'r_gripper_finger_joint', 'l_gripper_finger_joint', 'bellows_joint']
+        param_joints_gripper = []
         collision_link_names = ["shoulder_pan_link", "shoulder_lift_link", "upperarm_roll_link",
                     "elbow_flex_link", "forearm_roll_link", "wrist_flex_link", "wrist_roll_link", "gripper_link",
                     "l_gripper_finger_link", "r_gripper_finger_link"]
         link_ee = "wrist_roll_link"  # end-effector link name
         link_gripper = 'gripper_link'       
         arm_len = 1.1
-        arm_height = 1.1 
+        arm_height = 1.1
+        gripper_open_offsets = [0.05, 0.05]
+        base_position = np.array([0.0, 0.0, 0.0])
     elif robot_name == 'panda':
-        param_joints = ['panda_joint1', 'panda_joint2', 'panda_joint3', 'panda_joint4', 'panda_joint5', 'panda_joint6', 'panda_joint7']
+        param_joints = ['panda_hand_joint', 'panda_hand_camera_joint', 'panda_finger_joint1', 'panda_finger_joint2']
+        param_joints_gripper = ['panda_hand_camera_joint']
         collision_link_names = None  # all links
         link_ee = "panda_hand"     # end-effector link name
         link_gripper = 'panda_hand'
-        arm_len = 0.9
+        arm_len = 1.0
         arm_height = 0
+        gripper_open_offsets = [0.04, 0.04]
+        base_position = np.array([0.05, 0, 0.7])
     else:
         print(f'robot {robot_name} not supported')
         sys.exit(1)
@@ -354,10 +321,10 @@ if __name__ == '__main__':
 
     # load robot gripper model
     urdf_filename = os.path.join(robot_model_dir, f"{robot_name}_gripper.urdf")
-    gripper_model = GTORobotModel(robot_model_dir, urdf_filename=urdf_filename)
+    gripper_model = GTORobotModel(robot_model_dir, urdf_filename=urdf_filename, param_joints=param_joints_gripper)
 
     # create the table environment
-    env = SceneReplicaEnv(robot_name)
+    env = SceneReplicaEnv(robot_name, base_position)
     # add objects
     print(f"-----------Scene: {scene_id}---------------")
     meta_f = "meta-%06d.mat" % scene_id
@@ -385,8 +352,6 @@ if __name__ == '__main__':
 
     # define the standoff pose
     offset = -0.01
-    pose_standoff = np.eye(4, dtype=np.float32)
-    pose_standoff[0, 3] = offset
     
     # two orderings
     for ordering in ["nearest_first", "random"]:
@@ -414,36 +379,16 @@ if __name__ == '__main__':
 
             # transform grasps to robot base
             n = RT_grasps.shape[0]
-            RT_grasps_base = np.zeros_like(RT_grasps)
+            RT_grasps_world = np.zeros_like(RT_grasps)
             in_collision = np.zeros((n, ), dtype=np.int32)
             for i in range(n):
                 RT_g = RT_grasps[i]
                 RT = RT_obj @ RT_g
-                RT_grasps_base[i] = RT
-
-                # visualize grasps
-                vis = Visualizer(camera_position=[3, 0, 3])
-                vis.grid_floor()
-                vis.points(
-                    depth_pc.points,
-                )
-                q = [0, 0]
-                position = RT[:3, 3]
-                # scalar-last (x, y, z, w) format in optas
-                quat = mat2quat(RT[:3, :3])
-                orientation = [quat[1], quat[2], quat[3], quat[0]]
-                vis.robot(
-                    gripper_model,
-                    base_position=position,
-                    base_orientation=orientation,
-                    q=q
-                )
-                vis.start()
+                RT_grasps_world[i] = RT
 
                 # check if the grasp is in collision
-                q_user_input = [0.05] * gripper_model.ndof
-                RT_off = RT @ pose_standoff
-                gripper_points, normals = gripper_model.compute_fk_surface_points(q_user_input, tf_base=RT_off)
+                RT_off = RT @ env.robot.get_standoff_pose(offset)
+                gripper_points, normals = gripper_model.compute_fk_surface_points(gripper_open_offsets, tf_base=RT_off)
                 sdf = depth_pc.get_sdf(gripper_points)
 
                 ratio = np.sum(sdf < 0) / len(sdf)
@@ -461,24 +406,48 @@ if __name__ == '__main__':
                 # scene.add(pyrender.Mesh.from_points(depth_pc.points))
                 # pyrender.Viewer(scene, use_raymond_lighting=True, point_size=2)
             
-            RT_grasps_base = RT_grasps_base[in_collision == 0] 
-            print('Among %d grasps, %d in collision, %d collision-free' % (n, np.sum(in_collision), RT_grasps_base.shape[0]))
-            if RT_grasps_base.shape[0] == 0:
-                continue
+            RT_grasps_world = RT_grasps_world[in_collision == 0] 
+            print('Among %d grasps, %d in collision, %d collision-free' % (n, np.sum(in_collision), RT_grasps_world.shape[0]))
+            if RT_grasps_world.shape[0] == 0:
+                continue           
 
             # test IK for remaining grasps
-            n = RT_grasps_base.shape[0]
+            n = RT_grasps_world.shape[0]
             found_ik = np.zeros((n, ), dtype=np.int32)
             q0 = np.array(env.robot.q()).reshape((env.robot.ndof, 1))
             for i in range(n):
-                RT = RT_grasps_base[i]
+                RT = RT_grasps_world[i]
+                # change world to robot base
+                RT[:3, 3] -= base_position
+                print(RT)
+                sys.exit(1)
                 q_solution, err_pos, err_rot = ik_solver.solve_ik(q0, RT)
                 if err_pos < 0.01 and err_rot < 5:
                     found_ik[i] = 1
             RT_grasps_base = RT_grasps_base[found_ik == 1] 
             print('Among %d grasps, %d found IK' % (n, np.sum(found_ik)))
             if RT_grasps_base.shape[0] == 0:
-                continue            
+                continue
+
+            # visualize grasps
+            vis = Visualizer(camera_position=[3, 0, 3])
+            vis.grid_floor()
+            vis.points(
+                depth_pc.points,
+            )
+            RT = RT_grasps_base[0]
+            print(RT)
+            position = RT[:3, 3]
+            # scalar-last (x, y, z, w) format in optas
+            quat = mat2quat(RT[:3, :3])
+            orientation = [quat[1], quat[2], quat[3], quat[0]]
+            vis.robot(
+                gripper_model,
+                base_position=position,
+                base_orientation=orientation,
+                q=gripper_open_offsets,
+            )
+            vis.start()              
 
             # plan to a grasp
             qc = env.robot.q()

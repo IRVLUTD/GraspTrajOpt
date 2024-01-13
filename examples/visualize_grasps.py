@@ -90,12 +90,13 @@ if __name__ == "__main__":
     )
 
     print(robot_model)
+    print(robot_model.joint_names)
     print(robot_model.link_names)
 
     # visualize grasps
     q = [0.05, 0.05]
     n = RT_grasps.shape[0]
-    for i in np.random.permutation(n)[:5]:
+    for i in np.random.permutation(n)[:10]:
         RT_g = RT_grasps[i]
         print(RT_g)
         position = RT_g[:3, 3]

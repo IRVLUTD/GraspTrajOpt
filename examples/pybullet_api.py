@@ -6,8 +6,37 @@ import optas
 import pybullet as p
 import pybullet_data
 import numpy as np
+from utils import *
 
 cwd = pathlib.Path(__file__).parent.resolve()  # path to current working directory
+
+
+def pybullet_show_frame(RT):
+
+    origin = RT[:3, 3]
+    frame = np.eye(3)
+    frame_new = RT[:3, :3] @ frame + origin.reshape((3, 1))
+
+    x_axis = p.addUserDebugLine(lineFromXYZ = origin,
+                            lineToXYZ = frame_new[:, 0],
+                            lineColorRGB = [1, 0, 0],
+                            lineWidth = 0.1,
+                            lifeTime = 0
+                            )    
+
+    y_axis = p.addUserDebugLine(lineFromXYZ = origin,
+                            lineToXYZ = frame_new[:, 1],
+                            lineColorRGB = [0, 1, 0],
+                            lineWidth = 0.1,
+                            lifeTime = 0
+                            )
+    
+    z_axis = p.addUserDebugLine(lineFromXYZ = origin,
+                            lineToXYZ = frame_new[:, 2],
+                            lineColorRGB = [0, 0, 1],
+                            lineWidth = 0.1,
+                            lifeTime = 0
+                            )
 
 
 class PyBullet:
@@ -203,10 +232,29 @@ class Panda(FixedBaseRobot):
         self.urdf_filename = f
         super().__init__(f, base_position=base_position)
         self.ee_index = 7
+        self.camera_link_index = 10
+        self.gripper_open_offsets = [0.04, 0.04]
 
     def default_pose(self):
         # no panda joint 8
         return np.array([0.0, -1.285, 0, -2.356, 0.0, 1.571, 0.785, 0.04, 0.04])
+    
+    def get_standoff_pose(self, offset):
+        pose_standoff = np.eye(4, dtype=np.float32)
+        pose_standoff[2, 3] = offset
+        return pose_standoff
+    
+    def get_camera_pose(self):
+        pos, orn = p.getLinkState(self._id, self.camera_link_index)[:2]
+        cam_pose = list(pos) + [orn[3], orn[0], orn[1], orn[2]]
+        cam_pose_mat = unpack_pose(cam_pose)
+
+        RT = cam_pose_mat.dot(rotX(-np.pi / 2).dot(rotZ(-np.pi)))
+        pose = RT.dot(rotX(np.pi))
+        # pybullet_show_frame(pose)
+
+        cam_view_matrix = se3_inverse(RT).T.flatten().tolist()  # z backward
+        return cam_view_matrix, pose
     
     def close_gripper(self):
         q = self.q()
@@ -219,7 +267,6 @@ class Panda(FixedBaseRobot):
             self.cmd(q)
             for _ in range(100):
                 p.stepSimulation()
-
 
     def open_gripper(self):
         q = self.q()
@@ -236,6 +283,8 @@ class Fetch(FixedBaseRobot):
         self.urdf_filename = f
         super().__init__(f, base_position=base_position)
         self.ee_index = 16
+        self.camera_link_index = 7
+        self.gripper_open_joints = [0.05, 0.05]
 
     def default_pose(self):
         # set robot pose
@@ -260,6 +309,23 @@ class Fetch(FixedBaseRobot):
         joint_command[12] = 0.05
         joint_command[13] = 0.05        
         return joint_command
+    
+    def get_standoff_pose(self, offset):
+        pose_standoff = np.eye(4, dtype=np.float32)
+        pose_standoff[0, 3] = offset
+        return pose_standoff
+    
+    def get_camera_pose(self):
+        pos, orn = p.getLinkState(self._id, self.camera_link_index)[:2]
+        cam_pose = list(pos) + [orn[3], orn[0], orn[1], orn[2]]
+        cam_pose_mat = unpack_pose(cam_pose)
+        # z backward
+        RT = cam_pose_mat.dot(rotX(-np.pi))
+        # show frame for debugging
+        pybullet_show_frame(cam_pose_mat)
+        input('next?')
+        cam_view_matrix = se3_inverse(RT).T.flatten().tolist()
+        return cam_view_matrix, cam_pose_mat
 
 
     def close_gripper(self):
