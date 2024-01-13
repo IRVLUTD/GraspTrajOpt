@@ -11,7 +11,7 @@
     </visual>
     <collision>
       <geometry>
-        <mesh filename="meshes/collision/hand.obj"/>
+        <mesh filename="meshes/collision/hand.stl"/>
       </geometry>
       <material name="panda_white"/>
     </collision>
@@ -38,7 +38,7 @@
     </visual>
     <collision>
       <geometry>
-        <mesh filename="meshes/collision/finger.obj"/>
+        <mesh filename="meshes/collision/finger.stl"/>
       </geometry>
       <material name="panda_white"/>
     </collision>
@@ -67,7 +67,7 @@
     <collision>
       <origin rpy="0 0 3.14159265359" xyz="0 0 0"/>
       <geometry>
-        <mesh filename="meshes/collision/finger.obj"/>
+        <mesh filename="meshes/collision/finger.stl"/>
       </geometry>
       <material name="panda_white"/>
     </collision>

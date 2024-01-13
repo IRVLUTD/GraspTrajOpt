@@ -5,7 +5,7 @@
   <link name="panda_link0">
     <visual>
       <geometry>
-        <mesh filename="meshes/collision/link0.obj"/>
+        <mesh filename="meshes/visual/link0.obj"/>
       </geometry>
       <material name="panda_white">
         <color rgba="1. 1. 1. 1."/>
@@ -13,7 +13,7 @@
     </visual>
     <collision>
       <geometry>
-        <mesh filename="meshes/collision/link0.obj"/>
+        <mesh filename="meshes/collision/link0.stl"/>
       </geometry>
       <material name="panda_white"/>
     </collision>
@@ -33,7 +33,7 @@
     </visual>
     <collision>
       <geometry>
-        <mesh filename="meshes/collision/link1.obj"/>
+        <mesh filename="meshes/collision/link1.stl"/>
       </geometry>
       <material name="panda_white"/>
     </collision>
@@ -63,7 +63,7 @@
     </visual>
     <collision>
       <geometry>
-        <mesh filename="meshes/collision/link2.obj"/>
+        <mesh filename="meshes/collision/link2.stl"/>
       </geometry>
       <material name="panda_white"/>
     </collision>
@@ -95,7 +95,7 @@
     </visual>
     <collision>
       <geometry>
-        <mesh filename="meshes/collision/link3.obj"/>
+        <mesh filename="meshes/collision/link3.stl"/>
       </geometry>
     </collision>
     <inertial>
@@ -124,7 +124,7 @@
     </visual>
     <collision>
       <geometry>
-        <mesh filename="meshes/collision/link4.obj"/>
+        <mesh filename="meshes/collision/link4.stl"/>
       </geometry>
       <material name="panda_white"/>
     </collision>
@@ -154,7 +154,7 @@
     </visual>
     <collision>
       <geometry>
-        <mesh filename="meshes/collision/link5.obj"/>
+        <mesh filename="meshes/collision/link5.stl"/>
       </geometry>
       <material name="panda_white"/>
     </collision>
@@ -184,7 +184,7 @@
     </visual>
     <collision>
       <geometry>
-        <mesh filename="meshes/collision/link6.obj"/>
+        <mesh filename="meshes/collision/link6.stl"/>
       </geometry>
       <material name="panda_white"/>
     </collision>
@@ -208,13 +208,13 @@
   <link name="panda_link7">
     <visual>
       <geometry>
-        <mesh filename="meshes/collision/link7.obj"/>
+        <mesh filename="meshes/visual/link7.obj"/>
       </geometry>
       <material name="panda_white"/>
     </visual>
     <collision>
       <geometry>
-        <mesh filename="meshes/collision/link7.obj"/>
+        <mesh filename="meshes/collision/link7.stl"/>
       </geometry>
       <material name="panda_white"/>
     </collision>
@@ -250,7 +250,7 @@
     </visual>
     <collision>
       <geometry>
-        <mesh filename="meshes/collision/hand.obj"/>
+        <mesh filename="meshes/collision/hand.stl"/>
       </geometry>
       <material name="panda_white"/>
     </collision>
@@ -277,7 +277,7 @@
     </visual>
     <collision>
       <geometry>
-        <mesh filename="meshes/collision/finger.obj"/>
+        <mesh filename="meshes/collision/finger.stl"/>
       </geometry>
       <material name="panda_white"/>
     </collision>
@@ -306,7 +306,7 @@
     <collision>
       <origin rpy="0 0 3.14159265359" xyz="0 0 0"/>
       <geometry>
-        <mesh filename="meshes/collision/finger.obj"/>
+        <mesh filename="meshes/collision/finger.stl"/>
       </geometry>
       <material name="panda_white"/>
     </collision>
