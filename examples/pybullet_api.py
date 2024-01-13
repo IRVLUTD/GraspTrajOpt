@@ -223,7 +223,19 @@ class FixedBaseRobot:
         self.cmd(q)
         for _ in range(100):
             p.stepSimulation()
-        self.open_gripper()                
+        self.open_gripper()
+
+    def get_standoff_pose(self, offset, axis):
+        pose_standoff = np.eye(4, dtype=np.float32)
+        if axis == 'x':
+            pose_standoff[0, 3] = offset
+        elif axis == 'y':
+            pose_standoff[1, 3] = offset
+        elif axis == 'z':
+            pose_standoff[2, 3] = offset
+        else:
+            print('unknow standoff axis', axis)
+        return pose_standoff                   
 
 
 class Panda(FixedBaseRobot):
@@ -238,11 +250,6 @@ class Panda(FixedBaseRobot):
     def default_pose(self):
         # no panda joint 8
         return np.array([0.0, -1.285, 0, -2.356, 0.0, 1.571, 0.785, 0.04, 0.04])
-    
-    def get_standoff_pose(self, offset):
-        pose_standoff = np.eye(4, dtype=np.float32)
-        pose_standoff[2, 3] = offset
-        return pose_standoff
     
     def get_camera_pose(self):
         pos, orn = p.getLinkState(self._id, self.camera_link_index)[:2]
@@ -309,11 +316,6 @@ class Fetch(FixedBaseRobot):
         joint_command[12] = 0.05
         joint_command[13] = 0.05        
         return joint_command
-    
-    def get_standoff_pose(self, offset):
-        pose_standoff = np.eye(4, dtype=np.float32)
-        pose_standoff[0, 3] = offset
-        return pose_standoff
     
     def get_camera_pose(self):
         pos, orn = p.getLinkState(self._id, self.camera_link_index)[:2]

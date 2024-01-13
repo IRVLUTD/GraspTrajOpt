@@ -158,25 +158,29 @@ def rotz(theta: ArrayType) -> CasADiArrayType:
     )
 
 @arrayify_args
-def standoff(offset: ArrayType) -> CasADiArrayType:
+def standoff(offset: ArrayType, axis: str = "x") -> CasADiArrayType:
     # define the standoff pose
-    return cs.vertcat(
-        cs.horzcat(1.0, 0.0, 0.0, offset),
-        cs.DM([[0.0, 1.0, 0.0, 0.0]]),
-        cs.DM([[0.0, 0.0, 1.0, 0.0]]),
-        cs.DM([[0.0, 0.0, 0.0, 1.0]]),
-    )
-
-
-@arrayify_args
-def standoff(offset: ArrayType) -> CasADiArrayType:
-    # define the standoff pose
-    return cs.vertcat(
-        cs.horzcat(1.0, 0.0, 0.0, offset),
-        cs.DM([[0.0, 1.0, 0.0, 0.0]]),
-        cs.DM([[0.0, 0.0, 1.0, 0.0]]),
-        cs.DM([[0.0, 0.0, 0.0, 1.0]]),
-    )
+    if axis == 'x':
+        return cs.vertcat(
+            cs.horzcat(1.0, 0.0, 0.0, offset),
+            cs.DM([[0.0, 1.0, 0.0, 0.0]]),
+            cs.DM([[0.0, 0.0, 1.0, 0.0]]),
+            cs.DM([[0.0, 0.0, 0.0, 1.0]]),
+        )
+    elif axis == 'y':
+        return cs.vertcat(
+            cs.horzcat(1.0, 0.0, 0.0, 0.0),
+            cs.DM([[0.0, 1.0, 0.0, offset]]),
+            cs.DM([[0.0, 0.0, 1.0, 0.0]]),
+            cs.DM([[0.0, 0.0, 0.0, 1.0]]),
+        )
+    elif axis == 'z':
+        return cs.vertcat(
+            cs.horzcat(1.0, 0.0, 0.0, 0.0),
+            cs.DM([[0.0, 1.0, 0.0, 0.0]]),
+            cs.DM([[0.0, 0.0, 1.0, offset]]),
+            cs.DM([[0.0, 0.0, 0.0, 1.0]]),
+        )
 
 
 @arrayify_args

@@ -284,7 +284,9 @@ if __name__ == '__main__':
 
     # load robot model
     robot_model_dir = os.path.join(cwd, "robots", robot_name)
-    urdf_filename = os.path.join(robot_model_dir, f"{robot_name}.urdf")  
+    urdf_filename = os.path.join(robot_model_dir, f"{robot_name}.urdf")
+    # define the standoff pose
+    offset = -0.01    
     if robot_name == 'fetch':
         param_joints = ['r_wheel_joint', 'l_wheel_joint', 'torso_lift_joint', 'head_pan_joint', 'head_tilt_joint', 
                         'r_gripper_finger_joint', 'l_gripper_finger_joint', 'bellows_joint']
@@ -297,6 +299,7 @@ if __name__ == '__main__':
         arm_height = 1.1
         gripper_open_offsets = [0.05, 0.05]
         base_position = np.array([0.0, 0.0, 0.0])
+        axis_standoff = 'x'
     elif robot_name == 'panda':
         param_joints = ['panda_finger_joint1', 'panda_finger_joint2']
         collision_link_names = None  # all links
@@ -306,6 +309,7 @@ if __name__ == '__main__':
         arm_height = 0
         gripper_open_offsets = [0.04, 0.04]
         base_position = np.array([0.05, 0, 0.7])
+        axis_standoff = 'z'
     else:
         print(f'robot {robot_name} not supported')
         sys.exit(1)
@@ -347,9 +351,6 @@ if __name__ == '__main__':
     print('Initialize planner')
     planner = GTOPlanner(robot, link_ee, link_gripper)
     ik_solver = IKSolver(robot, link_ee, link_gripper)   
-
-    # define the standoff pose
-    offset = -0.01
     
     # two orderings
     for ordering in ["nearest_first", "random"]:
@@ -385,7 +386,7 @@ if __name__ == '__main__':
                 RT_grasps_world[i] = RT
 
                 # check if the grasp is in collision
-                RT_off = RT @ env.robot.get_standoff_pose(offset)
+                RT_off = RT @ env.robot.get_standoff_pose(offset, axis_standoff)
                 gripper_points, normals = gripper_model.compute_fk_surface_points(gripper_open_offsets, tf_base=RT_off)
                 sdf = depth_pc.get_sdf(gripper_points)
 
@@ -428,31 +429,9 @@ if __name__ == '__main__':
             if RT_grasps_world.shape[0] == 0:
                 continue
 
-            # visualize grasps
-            vis = Visualizer(camera_position=[3, 0, 3])
-            vis.grid_floor()
-            vis.points(
-                depth_pc.points,
-            )
-            RT = RT_grasps_world[0]
-            print(RT)
-            position = RT[:3, 3]
-            # scalar-last (x, y, z, w) format in optas
-            quat = mat2quat(RT[:3, :3])
-            orientation = [quat[1], quat[2], quat[3], quat[0]]
-            vis.robot(
-                gripper_model,
-                base_position=position,
-                base_orientation=orientation,
-                q=gripper_open_offsets,
-            )
-            vis.start()              
-
-            # plan to a grasp
+            # plan to a grasp set
             qc = env.robot.q()
-            # RT = RT_grasps_base[0]
-            # plan = planner.plan(qc, RT, sdf_cost)
-            plan = planner.plan_goalset(qc, RT_grasps_base, sdf_cost)
+            plan = planner.plan_goalset(qc, RT_grasps_base, sdf_cost, use_standoff=True, axis_standoff=axis_standoff)
 
             # visualize grasps
             vis = Visualizer(camera_position=[3, 0, 3])
@@ -477,7 +456,7 @@ if __name__ == '__main__':
             index = list(range(0, n, 10))
             if index[-1] != n - 1:
                 index += [n - 1]
-            vis.robot_traj(robot, plan[:, index], alpha_spec={'style': 'A'})
+            vis.robot_traj(robot, plan[:, index], base_position, alpha_spec={'style': 'A'})
             vis.start()
 
             env.robot.execute_plan(plan)

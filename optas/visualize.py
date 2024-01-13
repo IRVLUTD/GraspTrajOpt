@@ -1167,6 +1167,10 @@ class Visualizer:
         self,
         robot_model,
         Q,
+        base_position: ArrayType = [0.0, 0.0, 0.0],
+        base_orientation: ArrayType = [0.0, 0.0, 0.0],
+        euler_seq: str = "xyz",
+        euler_degrees: bool = False,
         alpha_spec=None,
         show_links=False,
         link_axis_scale=0.2,
@@ -1228,6 +1232,10 @@ class Visualizer:
         for i, alpha in enumerate(alphas):
             robot = self.robot(
                 robot_model,
+                base_position=base_position,
+                base_orientation=base_orientation,
+                euler_seq=euler_seq,
+                euler_degrees=euler_degrees,                  
                 q=Q[:, i],
                 alpha=alpha,
                 show_links=show_links,

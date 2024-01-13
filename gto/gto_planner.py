@@ -27,8 +27,7 @@ class GTOPlanner:
         t = optas.linspace(0, self.Tmax, self.T)
         self.dt = float((t[1] - t[0]).toarray()[0, 0])  # time step
         self.standoff_offset = -5
-        self.standoff_distance = -0.1
-        self.pose_standoff = standoff(self.standoff_distance)        
+        self.standoff_distance = -0.1       
 
         # Setup robot
         self.robot = robot
@@ -40,7 +39,7 @@ class GTOPlanner:
         self.collision_avoidance = collision_avoidance
 
 
-    def setup_optimization(self, goal_size=1, use_standoff=False):
+    def setup_optimization(self, goal_size=1, use_standoff=False, axis_standoff='x'):
         # Setup optimization builder
         builder = optas.OptimizationBuilder(T=self.T, robots=[self.robot])
 
@@ -95,6 +94,7 @@ class GTOPlanner:
             points_tf_goal = tf_gripper_goal[:3, :3] @ self.gripper_points.T + tf_gripper_goal[:3, 3].reshape((3, 1))
             # standoff
             if use_standoff:
+                self.pose_standoff = standoff(self.standoff_distance, axis_standoff) 
                 tf_gripper_standoff = tf_g @ self.pose_standoff @ self.gripper_tf(Q[:, self.T + self.standoff_offset])
                 points_standoff_goal = tf_gripper_standoff[:3, :3] @ self.gripper_points.T + tf_gripper_standoff[:3, 3].reshape((3, 1))
                 cost[i] = optas.sumsqr(points_tf - points_tf_goal) + optas.sumsqr(points_standoff - points_standoff_goal)
@@ -161,18 +161,15 @@ class GTOPlanner:
         return Q.toarray()
     
 
-    def plan_goalset(self, qc, RTs, sdf_cost, use_standoff=True):
-        self.setup_optimization(use_standoff)
+    def plan_goalset(self, qc, RTs, sdf_cost, use_standoff=True, axis_standoff='x'):
+        self.setup_optimization(use_standoff, axis_standoff)
 
         n = RTs.shape[0]
         self.setup_optimization(goal_size=n, use_standoff=True)
-        tf_goal = np.zeros((7, n))
+        tf_goal = np.zeros((16, n))
         for i in range(n):
             RT = RTs[i]
-            quat = mat2quat(RT[:3, :3])
-            orientation = [quat[1], quat[2], quat[3], quat[0]]
-            tf_goal[:3, i] = RT[:3, 3]
-            tf_goal[3:, i] = orientation        
+            tf_goal[:, i] = RT.flatten()
 
         Q0 = optas.diag(qc) @ optas.DM.ones(self.robot.ndof, self.T)
 
