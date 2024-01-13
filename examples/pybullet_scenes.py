@@ -411,17 +411,19 @@ if __name__ == '__main__':
 
             # test IK for remaining grasps
             n = RT_grasps_world.shape[0]
+            RT_grasps_base = RT_grasps_world.copy()
             found_ik = np.zeros((n, ), dtype=np.int32)
             q0 = np.array(env.robot.q()).reshape((env.robot.ndof, 1))
             for i in range(n):
                 RT = RT_grasps_world[i].copy()
                 # change world to robot base
                 RT[:3, 3] -= base_position
+                RT_grasps_base[i] = RT.copy()
                 q_solution, err_pos, err_rot = ik_solver.solve_ik(q0, RT)
                 if err_pos < 0.01 and err_rot < 5:
                     found_ik[i] = 1
-                    print(RT)
             RT_grasps_world = RT_grasps_world[found_ik == 1] 
+            RT_grasps_base = RT_grasps_base[found_ik == 1] 
             print('Among %d grasps, %d found IK' % (n, np.sum(found_ik)))
             if RT_grasps_world.shape[0] == 0:
                 continue

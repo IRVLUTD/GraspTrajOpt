@@ -68,7 +68,7 @@ class IKSolver:
         err_pos = np.linalg.norm(RT[:3, 3] - tf[:3, 3])
         quat1 = mat2quat(RT[:3, :3])
         quat2 = mat2quat(tf[:3, :3])
-        err_rot = np.arccos(2 * np.square(np.dot(quat1, quat2)) - 1) * 180 / np.pi
+        err_rot = np.arccos(np.clip(2 * np.square(np.dot(quat1, quat2)) - 1, -1, 1)) * 180 / np.pi
 
         print("***********************************") 
         print("Casadi IK solution:")
@@ -86,7 +86,7 @@ def make_args():
         "-r",
         "--robot",
         type=str,
-        default="fetch",
+        default="panda",
         help="Robot name",
     )
     args = parser.parse_args()
@@ -128,12 +128,7 @@ if __name__ == "__main__":
         RT = np.array([[-0.61162336,  0.79089652,  0.01998741,  0.46388378],
             [ 0.7883297,   0.6071185,   0.09971584, -0.15167381],
             [ 0.06673018,  0.07674521, -0.99481508,  0.22877409],
-            [ 0.,          0.,          0.,          1.        ]]) 
-        
-        RT = np.array([[ 0.90725112,  0.35363723, -0.22767539,  0.46844359],
-        [ 0.39880392, -0.89527687,  0.19858144, -0.2570503 ],
-        [-0.13360674, -0.27096108, -0.95327284,  0.22880854],
-        [ 0.,          0.,         0.,          1.        ]])
+            [ 0.,          0.,          0.,          1.        ]])
 
     else:
         print(f'robot {robot_name} not supported')
