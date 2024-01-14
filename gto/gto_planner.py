@@ -193,7 +193,7 @@ class GTOPlanner:
 
         # Get robot configuration
         Q = solution[f"{self.robot_name}/q"]
-        return Q.toarray()
+        return Q.toarray()   
 
 
 def make_args():

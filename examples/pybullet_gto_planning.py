@@ -157,7 +157,8 @@ if __name__ == '__main__':
                 idx = env.object_uids[env.object_names.index(object_name)]
                 target_mask = mask == idx
                 depth_pc = DepthPointCloud(depth, intrinsic_matrix, cam_pose, target_mask)
-                sdf_cost = depth_pc.get_sdf_cost(robot.workspace_points, epsilon=0.05)
+                world_points = robot.workspace_points + env.base_position.reshape((1, 3))
+                sdf_cost = depth_pc.get_sdf_cost(world_points, epsilon=0.05)
 
                 # load grasps
                 RT_grasps = load_grasps(data_dir, robot_name, object_name)
