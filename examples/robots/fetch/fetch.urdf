@@ -399,6 +399,13 @@
     <axis xyz="0 1 0" />
   </joint>
   <link name="r_gripper_finger_link">
+    <contact>
+      <friction_anchor/>
+      <stiffness value="30000.0"/>
+      <damping value="1000.0"/>
+      <spinning_friction value="0.1"/>
+      <lateral_friction value="5.0"/>
+    </contact>  
     <inertial>
       <origin rpy="0 0 0" xyz="-0.01 0 0" />
       <mass value="0.0798" />
@@ -427,6 +434,13 @@
     <axis xyz="0 1 0" />
   <limit effort="60" lower="0.0" upper="0.05" velocity="0.05" /><dynamics damping="100.0" /></joint>
   <link name="l_gripper_finger_link">
+    <contact>
+      <friction_anchor/>
+      <stiffness value="30000.0"/>
+      <damping value="1000.0"/>
+      <spinning_friction value="0.1"/>
+      <lateral_friction value="5.0"/>
+    </contact>  
     <inertial>
       <origin rpy="0 0 0" xyz="-0.01 0 0" />
       <mass value="0.0798" />

@@ -100,6 +100,7 @@ if __name__ == '__main__':
         arm_height = 1.1
         gripper_open_offsets = [0.05, 0.05]
         axis_standoff = 'x'
+        retract_distance = 0.4
     elif robot_name == 'panda':
         param_joints = ['panda_finger_joint1', 'panda_finger_joint2']
         collision_link_names = None  # all links
@@ -109,6 +110,7 @@ if __name__ == '__main__':
         arm_height = 0
         gripper_open_offsets = [0.04, 0.04]
         axis_standoff = 'z'
+        retract_distance = 0.3
     else:
         print(f'robot {robot_name} not supported')
         sys.exit(1)
@@ -259,7 +261,7 @@ if __name__ == '__main__':
                 env.robot.execute_plan(plan)
                 env.robot.close_gripper()
                 time.sleep(1.0)
-                env.retract()
+                env.retract(retract_distance)
                 reward = env.compute_reward(object_name)
                 print('reward:', reward)
                 # retract
@@ -276,6 +278,6 @@ if __name__ == '__main__':
     outdir = "results"
     if not os.path.exists(outdir):
         os.mkdir(outdir)
-    filename = os.path.join(outdir, 'GTO_scenereplica.json')
+    filename = os.path.join(outdir, f'GTO_scenereplica_{robot_name}.json')
     with open(filename, "w") as outfile: 
         json.dump(results_scene, outfile)

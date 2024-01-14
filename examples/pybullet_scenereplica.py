@@ -334,7 +334,7 @@ class SceneReplicaEnv():
         return reward            
 
 
-    def retract(self):
+    def retract(self, distance=0.3):
         """Retract step."""
         qc = self.robot.q()
         # keep gripper closed
@@ -343,8 +343,10 @@ class SceneReplicaEnv():
 
         self.step(qc)  # grasp
         pos, orn = p.getLinkState(self.robot._id, self.robot.ee_index)[:2]
+        num = 10
+        offset = distance / num
         for i in range(10):
-            pos = (pos[0], pos[1], pos[2] + 0.03)
+            pos = (pos[0], pos[1], pos[2] + offset)
             jointPoses = np.array(p.calculateInverseKinematics(self.robot._id, self.robot.ee_index, pos))
             for idx in self.robot.finger_index:
                 jointPoses[idx] = 0.0
