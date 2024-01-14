@@ -89,79 +89,71 @@ if __name__ == "__main__":
     cfg.timesteps = 50
     cfg.get_global_param(cfg.timesteps)
     cfg.vis = args.vis
+    cfg.cam_V = np.array(
+        [
+            [-0.9351, 0.3518, 0.0428, 0.3037],
+            [0.2065, 0.639, -0.741, 0.132],
+            [-0.2881, -0.684, -0.6702, 1.8803],
+            [0.0, 0.0, 0.0, 1.0],
+        ]
+    ) 
     scene = PlanningScene(cfg)
 
     # create the table environment
-    env = SceneReplicaEnv(data_dir, robot_name)    
+    env = SceneReplicaEnv(data_dir, robot_name)
 
     # load all objects
     for i, name in enumerate(env.ycb_object_names):
         trans, orn = env.cache_object_poses[i]
         scene.env.add_object(name, trans, tf_quat(orn), compute_grasp=True)   
-
-    scene.reset()
-    scene.fast_debug_vis(interact=int(args.vis), traj_type=0)
-    input('next?')
-    sys.exit(1)         
-
-
-    meta = env.setup_scene(scene_id)
-
-    for name in env.object_names:
-        trans, orn = env.meta_poses[name]
-        scene.env.add_object(name, trans, tf_quat(orn), compute_grasp=True)
-
-
-
     scene.env.add_plane(np.array([0.05, 0, -0.17]), np.array([1, 0, 0, 0]))
     scene.env.add_table(np.array([0.55, 0, -0.17]), np.array([0.707, 0.707, 0.0, 0]))
-    scene.env.combine_sdfs()
-    if args.experiment:   
-        scene_files = ['scene_{}'.format(i) for i in range(100)]
-    else:
-        scene_files = [scene_file]
+    scene.env.combine_sdfs()        
+    scene.reset()
+     
+    # set scene
+    meta = env.setup_scene(scene_id)
+    for name in env.meta_poses.keys():
+        trans, orn = env.meta_poses[name]
+        pose = np.zeros((7, ))
+        pose[:3] = trans - env.base_position
+        pose[3:] = tf_quat(orn)
+        scene.env.update_pose(name, pose)
 
-    cnts, rews = 0, 0
-    for scene_file in scene_files:
-        config.cfg.output_video_name = "output_videos/bullet_" + scene_file + ".avi"
-        cfg.scene_file = scene_file
-        video_writer = None
-        if args.write_video:
-            video_writer = cv2.VideoWriter(
-                config.cfg.output_video_name,
-                cv2.VideoWriter_fourcc(*"MJPG"),
-                10.0,
-                (640, 480),
-            )
-        full_name = os.path.join('data/scenes', scene_file + ".mat")
-        env.cache_reset(scene_file=full_name)
-        obj_names, obj_poses = env.get_env_info()
-        object_lists = [name.split("/")[-1].strip() for name in obj_names]
-        object_poses = [pack_pose(pose) for pose in obj_poses]
+    # two orderings
+    for ordering in ["nearest_first", "random"]:
+        object_order = meta[ordering][0].split(",")
+        print(ordering, object_order)
+        
+        # for each object
+        set_objects = set(object_order)
+        for object_name in object_order:
+            print(object_name)
+            # reset scene
+            env.reset_scene(set_objects)
 
-        exists_ids, placed_poses = [], []
-        for i, name in enumerate(object_lists[:-2]):  # update planning scene
-            scene.env.update_pose(name, object_poses[i])
-            obj_idx = env.obj_path[:-2].index("data/objects/" + name)
-            exists_ids.append(obj_idx)
-            trans, orn = env.cache_object_poses[obj_idx]
-            placed_poses.append(np.hstack([trans, ros_quat(orn)]))
+            cfg.disable_collision_set = [
+                name
+                for name in enumerate(env.ycb_object_names)
+                if name not in set_objects
+            ]            
 
-        cfg.disable_collision_set = [
-            name.split("/")[-2]
-            for obj_idx, name in enumerate(env.obj_path[:-2])
-            if obj_idx not in exists_ids
-        ]
-        scene.env.set_target(env.obj_path[env.target_idx].split("/")[-1])
-        scene.reset(lazy=True)
-        info = scene.step()
-        plan = scene.planner.history_trajectories[-1]
+            scene.env.set_target(object_name)
+            scene.reset(lazy=True)
+            info = scene.step()
+            plan = scene.planner.history_trajectories[-1]
 
-        rew = bullet_execute_plan(env, plan, args.write_video, video_writer)
-        for i, name in enumerate(object_lists[:-2]):  # reset planner
-            scene.env.update_pose(name, placed_poses[i])
-        cnts += 1
-        rews += rew
-        print('rewards: {} counts: {}'.format(rews, cnts))
+            scene.fast_debug_vis(interact=int(args.vis), nonstop=True)
 
-    env.disconnect()
+            print('executing...')
+            print(plan.shape)
+            env.robot.execute_plan(plan.T)
+            env.robot.close_gripper()
+            time.sleep(1.0)
+            env.retract()
+            reward = env.compute_reward(object_name)
+            print('reward:', reward)
+            # retract
+            env.reset_objects(object_name)
+            env.robot.retract()
+            set_objects.remove(object_name)                

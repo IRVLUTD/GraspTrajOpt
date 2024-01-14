@@ -158,7 +158,6 @@ class SceneReplicaEnv():
         meta_f = "meta-%06d.mat" % scene_id
         meta = scipy.io.loadmat(os.path.join(self.data_dir, "final_scenes", "metadata", meta_f))
         meta_obj_names = meta["object_names"]
-        meta_poses = {}
         for i, obj in enumerate(meta_obj_names):
             obj = obj.strip()
             position = meta["poses"][i][:3]
@@ -168,11 +167,18 @@ class SceneReplicaEnv():
             orientation = [quat[1], quat[2], quat[3], quat[0]]
             self.set_object_pose(obj, position, orientation)
             print(obj, position, orientation)
-            meta_poses[obj] = [position, orientation]
-        self.meta_poses = meta_poses
+            
         # start simulation
         self.start()
         time.sleep(1.0)
+
+        # store object pose
+        meta_poses = {}
+        for i, obj in enumerate(meta_obj_names):
+            obj = obj.strip()
+            position, orientation = self.get_object_pose(obj)
+            meta_poses[obj] = [position, orientation]
+        self.meta_poses = meta_poses
         return meta
     
     
