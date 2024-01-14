@@ -3,7 +3,7 @@ import time
 import numpy as np
 import pybullet as p
 import argparse
-import scipy
+import json 
 import matplotlib.pyplot as plt
 from pybullet_api import Fetch, Panda
 from pybullet_scenereplica import SceneReplicaEnv
@@ -96,7 +96,14 @@ if __name__ == "__main__":
             [-0.2881, -0.684, -0.6702, 1.8803],
             [0.0, 0.0, 0.0, 1.0],
         ]
-    ) 
+    )
+    cfg.remove_flip_grasp = False
+    cfg.remove_base_rotate_grasp = False
+    cfg.remove_camera_downward_grasp = False
+    cfg.augment_flip_grasp = False
+    cfg.y_upsample = False
+    cfg.z_upsample = False
+    cfg.ik_parallel = False
     scene = PlanningScene(cfg)
 
     # create the table environment
@@ -112,16 +119,19 @@ if __name__ == "__main__":
     scene.reset()
 
     total_success = 0
+    results_scene = {}
     for scene_id in env.all_scene_ids:
         print(f'=====================Scene {scene_id}========================')
         meta = env.setup_scene(scene_id)    
 
         # two orderings
+        results_ordering = {}
         for ordering in ["nearest_first", "random"]:
             object_order = meta[ordering][0].split(",")
             print(ordering, object_order)
             
             # for each object
+            results = {}
             set_objects = set(object_order)
             for object_name in object_order:
                 print(object_name)
@@ -147,7 +157,8 @@ if __name__ == "__main__":
                 info = scene.step()
                 plan = scene.planner.history_trajectories[-1]
 
-                scene.fast_debug_vis(interact=int(args.vis), nonstop=True)
+                if args.vis:
+                    scene.fast_debug_vis(interact=int(args.vis), nonstop=True)
 
                 env.robot.execute_plan(plan.T)
                 env.robot.close_gripper()
@@ -160,5 +171,16 @@ if __name__ == "__main__":
                 env.robot.retract()
                 set_objects.remove(object_name)                
                 total_success += reward
+                results[object_name] = reward
+            results_ordering[ordering] = results
+        results_scene[f'{scene_id}'] = results_ordering
 
     print('total success', total_success)
+
+    # write results
+    outdir = "results"
+    if not os.path.exists(outdir):
+        os.mkdir(outdir)
+    filename = 'OMG_scenereplica.json'
+    with open(filename, "w") as outfile: 
+        json.dump(results_scene, outfile)

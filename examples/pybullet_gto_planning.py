@@ -3,7 +3,7 @@ import time
 import numpy as np
 import pybullet as p
 import argparse
-import scipy
+import json
 import matplotlib.pyplot as plt
 from pybullet_api import Fetch, Panda
 from pybullet_scenereplica import SceneReplicaEnv
@@ -133,16 +133,19 @@ if __name__ == '__main__':
     ik_solver = IKSolver(robot, link_ee, link_gripper)   
     
     total_success = 0
+    results_scene = {}
     for scene_id in env.all_scene_ids:
         print(f'=====================Scene {scene_id}========================')
         meta = env.setup_scene(scene_id)
 
         # two orderings
+        results_ordering = {}
         for ordering in ["nearest_first", "random"]:
             object_order = meta[ordering][0].split(",")
             print(ordering, object_order)
             
             # for each object
+            results = {}
             set_objects = set(object_order)
             for object_name in object_order:
                 print(object_name)
@@ -198,6 +201,7 @@ if __name__ == '__main__':
                 print('Among %d grasps, %d in collision, %d collision-free' % (n, np.sum(in_collision), RT_grasps_world.shape[0]))
                 if RT_grasps_world.shape[0] == 0:
                     set_objects.remove(object_name)
+                    results[object_name] = 0
                     continue           
 
                 # test IK for remaining grasps
@@ -218,6 +222,7 @@ if __name__ == '__main__':
                 print('Among %d grasps, %d found IK' % (n, np.sum(found_ik)))
                 if RT_grasps_world.shape[0] == 0:
                     set_objects.remove(object_name)
+                    results[object_name] = 0
                     continue
 
                 # plan to a grasp set
@@ -261,5 +266,15 @@ if __name__ == '__main__':
                 env.robot.retract()
                 set_objects.remove(object_name)
                 total_success += reward
+                results[object_name] = reward
+            results_ordering[ordering] = results
+        results_scene[f'{scene_id}'] = results_ordering                
 
     print('total success', total_success)
+    # write results
+    outdir = "results"
+    if not os.path.exists(outdir):
+        os.mkdir(outdir)
+    filename = 'GTO_scenereplica.json'
+    with open(filename, "w") as outfile: 
+        json.dump(results_scene, outfile)    

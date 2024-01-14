@@ -385,7 +385,7 @@ def make_args():
         "-r",
         "--robot",
         type=str,
-        default="fetch",
+        default="panda",
         help="Robot name",
     )    
     parser.add_argument(
@@ -416,3 +416,4 @@ if __name__ == '__main__':
     # create the table environment
     env = SceneReplicaEnv(data_dir, robot_name)
     env.setup_scene(scene_id)
+    input('end?')
