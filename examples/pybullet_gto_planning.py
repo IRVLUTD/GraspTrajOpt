@@ -275,6 +275,6 @@ if __name__ == '__main__':
     outdir = "results"
     if not os.path.exists(outdir):
         os.mkdir(outdir)
-    filename = 'GTO_scenereplica.json'
+    filename = os.path.join(outdir, 'GTO_scenereplica.json')
     with open(filename, "w") as outfile: 
-        json.dump(results_scene, outfile)    
+        json.dump(results_scene, outfile)
