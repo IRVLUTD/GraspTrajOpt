@@ -15,7 +15,7 @@ class SceneReplicaEnv():
 
         self.data_dir = data_dir
         self.model_dir = os.path.join(data_dir, "objects")
-        self.scenes_path = os.path.join(data_dir, "final_scenes", "scene_data")   
+        self.scenes_path = os.path.join(data_dir, "final_scenes", "scene_data")
 
         self._renders = True
         self._egl_render = False
@@ -37,6 +37,10 @@ class SceneReplicaEnv():
             print(f'robot {robot_name} not supported')
             sys.exit(1)
         self.base_position = base_position
+
+        # load scene ids
+        filename = os.path.join(data_dir, 'final_scenes', 'scene_ids.txt')
+        self.all_scene_ids = sorted(np.loadtxt(filename).astype(int))
 
         # all 16 YCB objects in SceneReplica
         self.ycb_object_names = (
@@ -158,8 +162,11 @@ class SceneReplicaEnv():
         meta_f = "meta-%06d.mat" % scene_id
         meta = scipy.io.loadmat(os.path.join(self.data_dir, "final_scenes", "metadata", meta_f))
         meta_obj_names = meta["object_names"]
+        names = []
+        meta_poses = {}
         for i, obj in enumerate(meta_obj_names):
             obj = obj.strip()
+            names.append(obj)
             position = meta["poses"][i][:3]
             position[2] += 0.02
             quat = meta["poses"][i][3:]
@@ -167,18 +174,16 @@ class SceneReplicaEnv():
             orientation = [quat[1], quat[2], quat[3], quat[0]]
             self.set_object_pose(obj, position, orientation)
             print(obj, position, orientation)
-            
+            meta_poses[obj] = [position, orientation]
+        self.meta_poses = meta_poses            
+        # other objects
+        for i, name in enumerate(self.ycb_object_names):
+            if name not in names:
+                position, orientation = self.cache_object_poses[i]
+                self.set_object_pose(name, position, orientation)
         # start simulation
         self.start()
         time.sleep(1.0)
-
-        # store object pose
-        meta_poses = {}
-        for i, obj in enumerate(meta_obj_names):
-            obj = obj.strip()
-            position, orientation = self.get_object_pose(obj)
-            meta_poses[obj] = [position, orientation]
-        self.meta_poses = meta_poses
         return meta
     
     

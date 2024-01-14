@@ -110,50 +110,55 @@ if __name__ == "__main__":
     scene.env.add_table(np.array([0.55, 0, -0.17]), np.array([0.707, 0.707, 0.0, 0]))
     scene.env.combine_sdfs()        
     scene.reset()
-     
-    # set scene
-    meta = env.setup_scene(scene_id)
-    for name in env.meta_poses.keys():
-        trans, orn = env.meta_poses[name]
-        pose = np.zeros((7, ))
-        pose[:3] = trans - env.base_position
-        pose[3:] = tf_quat(orn)
-        scene.env.update_pose(name, pose)
 
-    # two orderings
-    for ordering in ["nearest_first", "random"]:
-        object_order = meta[ordering][0].split(",")
-        print(ordering, object_order)
-        
-        # for each object
-        set_objects = set(object_order)
-        for object_name in object_order:
-            print(object_name)
-            # reset scene
-            env.reset_scene(set_objects)
+    total_success = 0
+    for scene_id in env.all_scene_ids:
+        print(f'=====================Scene {scene_id}========================')
+        meta = env.setup_scene(scene_id)    
 
-            cfg.disable_collision_set = [
-                name
-                for name in enumerate(env.ycb_object_names)
-                if name not in set_objects
-            ]            
+        # two orderings
+        for ordering in ["nearest_first", "random"]:
+            object_order = meta[ordering][0].split(",")
+            print(ordering, object_order)
+            
+            # for each object
+            set_objects = set(object_order)
+            for object_name in object_order:
+                print(object_name)
+                # reset scene
+                env.reset_scene(set_objects)
 
-            scene.env.set_target(object_name)
-            scene.reset(lazy=True)
-            info = scene.step()
-            plan = scene.planner.history_trajectories[-1]
+                # set scene
+                for name in env.ycb_object_names:
+                    trans, orn = env.get_object_pose(name)
+                    pose = np.zeros((7, ))
+                    pose[:3] = trans - env.base_position
+                    pose[3:] = tf_quat(orn)
+                    scene.env.update_pose(name, pose)                
 
-            scene.fast_debug_vis(interact=int(args.vis), nonstop=True)
+                cfg.disable_collision_set = [
+                    name
+                    for name in enumerate(env.ycb_object_names)
+                    if name not in set_objects
+                ]            
 
-            print('executing...')
-            print(plan.shape)
-            env.robot.execute_plan(plan.T)
-            env.robot.close_gripper()
-            time.sleep(1.0)
-            env.retract()
-            reward = env.compute_reward(object_name)
-            print('reward:', reward)
-            # retract
-            env.reset_objects(object_name)
-            env.robot.retract()
-            set_objects.remove(object_name)                
+                scene.env.set_target(object_name)
+                scene.reset(lazy=True)
+                info = scene.step()
+                plan = scene.planner.history_trajectories[-1]
+
+                scene.fast_debug_vis(interact=int(args.vis), nonstop=True)
+
+                env.robot.execute_plan(plan.T)
+                env.robot.close_gripper()
+                time.sleep(1.0)
+                env.retract()
+                reward = env.compute_reward(object_name)
+                print('reward:', reward)
+                # retract
+                env.reset_objects(object_name)
+                env.robot.retract()
+                set_objects.remove(object_name)                
+                total_success += reward
+
+    print('total success', total_success)
