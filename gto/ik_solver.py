@@ -7,7 +7,6 @@ import _init_paths
 
 # OpTaS
 import optas
-import tf_conversions
 import argparse
 import casadi as cs
 from optas.visualize import Visualizer

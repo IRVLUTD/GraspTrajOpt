@@ -35,9 +35,29 @@ class SceneReplicaEnv():
             base_position = np.array([0.05, 0, 0.7])
         else:
             print(f'robot {robot_name} not supported')
-            sys.exit(1)        
-        self.reset(robot_name, base_position)
+            sys.exit(1)
         self.base_position = base_position
+
+        # all 16 YCB objects in SceneReplica
+        self.ycb_object_names = (
+            "003_cracker_box",
+            "004_sugar_box",
+            "005_tomato_soup_can",
+            "006_mustard_bottle",
+            "007_tuna_fish_can",
+            "008_pudding_box",
+            "009_gelatin_box",
+            "010_potted_meat_can",
+            "011_banana",
+            "021_bleach_cleanser",
+            "024_bowl",
+            "025_mug",
+            "035_power_drill",
+            "037_scissors",
+            "040_large_marker",
+            "052_extra_large_clamp",
+        )
+        self.reset(robot_name, base_position)
 
 
     def connect(self):
@@ -87,6 +107,9 @@ class SceneReplicaEnv():
         # Set table and plane
         self.object_uids = []
         self.object_names = []
+        self.cache_object_poses = []
+        self.cache_objects()
+
         plane_file = os.path.join(self.root_dir, 'objects/floor/model_normalized.urdf') # _white
         table_file = os.path.join(self.root_dir, 'objects/cafe_table/cafe_table.urdf')
 
@@ -100,6 +123,35 @@ class SceneReplicaEnv():
         self.light_position = np.array([-1.0, 0, 2.5])
 
 
+    def cache_objects(self):
+        """
+        Load all YCB objects and set up (only work for single apperance)
+        """
+        num = len(self.ycb_object_names)
+        pose = np.zeros([num, 3])
+        pose[:, 0] = -2.0 - np.linspace(0, 4, num)  # place in the back
+        pose[:, 1] = 2
+        for i, name in enumerate(self.ycb_object_names):
+            print(f'loading {name}')
+            trans = pose[i]
+            orn = [0, 0, 0, 1]
+            self.cache_object_poses.append((trans.copy(), np.array(orn).copy()))
+            uid = self._add_mesh(
+                os.path.join(self.model_dir, name, "model_normalized.urdf"), trans, orn
+            )  # xyzw
+            self.object_uids.append(uid)
+            self.object_names.append(name)
+            p.changeDynamics(
+                uid,
+                -1,
+                restitution=0.1,
+                mass=0.1,
+                spinningFriction=1.0,
+                rollingFriction=1.0,
+                lateralFriction=1.0,
+            )      
+
+
     def setup_scene(self, scene_id):
         # add objects
         print(f"-----------Scene: {scene_id}---------------")
@@ -109,13 +161,12 @@ class SceneReplicaEnv():
         meta_poses = {}
         for i, obj in enumerate(meta_obj_names):
             obj = obj.strip()
-            filename = os.path.join(self.model_dir, obj, f'model_normalized.urdf')
             position = meta["poses"][i][:3]
             position[2] += 0.02
             quat = meta["poses"][i][3:]
             # scalar-last (x, y, z, w) format in optas
             orientation = [quat[1], quat[2], quat[3], quat[0]]
-            self.place_objects(filename, obj, position, orientation)
+            self.set_object_pose(obj, position, orientation)
             print(obj, position, orientation)
             meta_poses[obj] = [position, orientation]
         self.meta_poses = meta_poses
@@ -138,25 +189,6 @@ class SceneReplicaEnv():
         """
         bid = p.loadURDF(obj_file, trans, quat, globalScaling=scale, flags=p.URDF_ENABLE_CACHED_GRAPHICS_SHAPES)
         return bid
-
-
-    def place_objects(self, urdf_filename, name, position, orientation):
-        """
-        Place of an object to the scene
-        """
-        uid = self._add_mesh(urdf_filename, position, orientation)  # xyzw
-        self.object_uids.append(uid)
-        self.object_names.append(name)
-        # p.resetBaseVelocity(uid, (0.0, 0.0, 0.0), (0.0, 0.0, 0.0))
-        p.changeDynamics(
-            uid,
-            -1,
-            restitution=0.1,
-            mass=0.1,
-            spinningFriction=1.0,
-            rollingFriction=1.0,
-            lateralFriction=1.0,
-        )
 
 
     def reset_objects(self, object_name):
