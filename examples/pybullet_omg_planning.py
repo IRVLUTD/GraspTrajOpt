@@ -151,7 +151,7 @@ if __name__ == "__main__":
                 set_objects.remove(object_name)                
                 total_success += reward
                 print(f'total reward: {total_success}/{count}')
-                results[object_name] = {'reward': reward, 'plan': plan, 'ik_time': ik_time, 'planning_time': planning_time}
+                results[object_name] = {'reward': reward, 'plan': plan.tolist(), 'ik_time': ik_time, 'planning_time': planning_time}
             results_ordering[ordering] = results
         results_scene[f'{scene_id}'] = results_ordering
 

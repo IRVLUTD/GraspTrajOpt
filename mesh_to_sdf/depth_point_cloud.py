@@ -63,12 +63,26 @@ class DepthPointCloud:
         return distances
     
     
-    def get_sdf_cost(self, query_points, epsilon=0.05, w_inside=100):
+    def get_sdf_cost(self, query_points, epsilon=0.05, w_inside=100, vis=False):
         print('computing sdf cost...')
         distances, indices = self.kd_tree.query(query_points)
         distances = distances.astype(np.float32).reshape(-1)
         inside = ~self.is_outside(query_points)
         distances[inside] *= -1
+
+        # visualization
+        if vis:
+            index = np.absolute(distances) < 0.03
+            points_show = query_points[index]
+            colors = np.zeros(points_show.shape)
+            colors[distances[index] < 0, 2] = 1
+            colors[distances[index] > 0, 0] = 1
+            cloud = pyrender.Mesh.from_points(points_show, colors=colors)
+            scene = pyrender.Scene()
+            scene.add(cloud)
+            scene.add(pyrender.Mesh.from_points(self.points[::100]))
+            pyrender.Viewer(scene, use_raymond_lighting=True, point_size=5)
+
         # cost
         cost = np.zeros_like(distances)
         cost[inside] = w_inside * (-distances[inside] + epsilon / 2)
