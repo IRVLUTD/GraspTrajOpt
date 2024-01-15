@@ -12,6 +12,7 @@ import pyrender
 import casadi as cs
 from optas.spatialmath import rt2tr, rpy2r, ArrayType
 from optas.models import RobotModel
+from optas.visualize import Visualizer
 
 cwd = pathlib.Path(__file__).parent.resolve()  # path to current working directory
 
@@ -129,6 +130,16 @@ class GTORobotModel(RobotModel):
         # https://eli.thegreenplace.net/2015/memory-layout-of-multi-dimensional-arrays
         offsets = idxes[:, 2] + self.field_shape[2] * (idxes[:, 1] + self.field_shape[1] + idxes[:, 0])
         return offsets
+    
+    
+    def points_to_offsets_numpy(self, points):
+        n = points.shape[0]
+        origin = np.repeat(self.origin, n, axis=0)
+        idxes = np.floor((points - origin) / self.grid_resolution)
+        # offset = n_3 + N_3 * (n_2 + N_2 * n_1)
+        # https://eli.thegreenplace.net/2015/memory-layout-of-multi-dimensional-arrays
+        offsets = idxes[:, 2] + self.field_shape[2] * (idxes[:, 1] + self.field_shape[1] + idxes[:, 0])
+        return offsets    
 
 
 def make_args():
@@ -183,12 +194,17 @@ if __name__ == "__main__":
         q_user_input[2] = 0.4
     points_base_all, normals_base_all = robot_model.compute_fk_surface_points(q_user_input)
 
-    # show points
-    scene = pyrender.Scene()
-    colors = np.zeros(points_base_all.shape)
-    colors[:, 0] = 1
-    scene.add(pyrender.Mesh.from_points(points_base_all, normals=normals_base_all, colors=colors))
+    vis = Visualizer(camera_position=[3, 0, 3])
+    vis.grid_floor()
+    vis.points(
+        points_base_all,
+        rgb = [1, 0, 0],
+        size=5,
+    )
     n = robot_model.workspace_points.shape[0]
     index = np.random.permutation(n)[:10000]
-    scene.add(pyrender.Mesh.from_points(robot_model.workspace_points[index]))
-    pyrender.Viewer(scene, use_raymond_lighting=True, point_size=2)
+    vis.points(
+        robot_model.workspace_points[index],
+        rgb = [0, 1, 0],
+    )
+    vis.start()

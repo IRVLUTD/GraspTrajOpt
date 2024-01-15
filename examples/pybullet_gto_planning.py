@@ -10,7 +10,6 @@ from pybullet_scenereplica import SceneReplicaEnv
 from utils import *
 import _init_paths
 from mesh_to_sdf.depth_point_cloud import DepthPointCloud
-import optas
 from optas.visualize import Visualizer
 from gto.gto_models import GTORobotModel
 from gto.gto_planner import GTOPlanner
@@ -75,7 +74,30 @@ def visualize_plan(robot, gripper_model, base_position, plan, depth_pc, RT_grasp
     if index[-1] != n - 1:
         index += [n - 1]
     vis.robot_traj(robot, plan[:, index], base_position, alpha_spec={'style': 'A'})
-    vis.start()    
+    vis.start()
+
+
+def debug_plan(robot, base_position, plan, depth_pc, sdf_cost):
+    T = plan.shape[1]
+    for i in range(35, T):
+        q = plan[:, i]
+
+        points_base, _ = robot.compute_fk_surface_points(q)
+        offset = robot.points_to_offsets_numpy(points_base).astype(int)
+        cost = np.sum(sdf_cost[offset])
+        print(f'time step {q}, sdf cost {cost}')
+
+        vis = Visualizer(camera_position=[3, 0, 3])
+        vis.grid_floor()
+        vis.points(depth_pc.points)
+        vis.points(points_base, rgb=[1, 1, 0], size=5)
+        vis.robot(
+            robot,
+            base_position=base_position,
+            q=q,
+            alpha = 1,
+        )
+        vis.start()      
 
 
 def make_args():
@@ -299,6 +321,9 @@ if __name__ == '__main__':
                 print(f'total reward: {total_success}/{count}')
                 results[object_name] = {'reward': reward, 'plan': plan.tolist(), 'checking_time': checking_time,
                                          'ik_time': ik_time, 'planning_time': planning_time}
+                
+                debug_plan(robot, env.base_position, plan, depth_pc, sdf_cost)
+
             results_ordering[ordering] = results
         results_scene[f'{scene_id}'] = results_ordering                
 

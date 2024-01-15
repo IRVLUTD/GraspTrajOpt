@@ -31,7 +31,7 @@ def make_args():
         "-s",
         "--scene_id",
         type=int,
-        default=10,
+        default=-1,
         help="SceneReplica scene id",
     )
     parser.add_argument("-v", "--vis", help="renders", action="store_true")
@@ -88,7 +88,11 @@ if __name__ == "__main__":
     total_success = 0
     count = 0
     results_scene = {}
-    for scene_id in env.all_scene_ids:
+    if scene_id == -1:
+        all_scene_ids = env.all_scene_ids
+    else:
+        all_scene_ids = [scene_id]
+    for scene_id in all_scene_ids:
         print(f'=====================Scene {scene_id}========================')
         meta = env.setup_scene(scene_id)    
 
@@ -148,7 +152,7 @@ if __name__ == "__main__":
                 # retract
                 env.reset_objects(object_name)
                 env.robot.retract()
-                set_objects.remove(object_name)                
+                set_objects.remove(object_name)
                 total_success += reward
                 print(f'total reward: {total_success}/{count}')
                 results[object_name] = {'reward': reward, 'plan': plan.tolist(), 'ik_time': ik_time, 'planning_time': planning_time}

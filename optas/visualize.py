@@ -86,7 +86,7 @@ class VtkPointCloud:
         mapper.SetInputData(self.vtkPolyData)
         mapper.SetColorModeToDefault()
         mapper.SetScalarRange(zMin, zMax)
-        mapper.SetScalarVisibility(1)
+        mapper.ScalarVisibilityOff()
         self.vtkActor = vtk.vtkActor()
         self.vtkActor.SetMapper(mapper)
 
@@ -337,6 +337,7 @@ class Visualizer:
         data: ArrayType,
         rgb: Union[None, ArrayType] = None,
         alpha: float = 1.0,
+        size=1.0,
     ) -> vtk.vtkActor:
         """! Draw 3D points.
 
@@ -353,6 +354,7 @@ class Visualizer:
             pointCloud.addPoint(data[3*i:3*i+3])
 
         actor = pointCloud.vtkActor
+        actor.GetProperty().SetPointSize(size)
         self.set_rgba(actor, rgb, alpha)
         self.actors.append(actor)
 
