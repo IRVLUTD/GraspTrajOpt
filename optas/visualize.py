@@ -850,6 +850,8 @@ class Visualizer:
     def obj(
         self,
         obj_filename: str,
+        rgb=None,
+        alpha=1.0,
         png_texture_filename: str = None,
         position: ArrayType = [0.0, 0.0, 0.0],
         orientation: ArrayType = [0.0, 0.0, 0.0],
@@ -889,7 +891,7 @@ class Visualizer:
             actor.SetTexture(texture)
 
         self.set_tf(actor, position, orientation, euler_seq, euler_degrees)
-
+        self.set_rgba(actor, rgb, alpha)
         self.actors.append(actor)
 
         return actor
@@ -1130,6 +1132,7 @@ class Visualizer:
                             self.obj(
                                 filename,
                                 png_texture_filename=png_texture_filename,
+                                alpha=alpha,
                                 position=position,
                                 orientation=orientation,
                                 euler_seq="xyz",
