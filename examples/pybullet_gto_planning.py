@@ -1,5 +1,5 @@
 import os, sys
-import time
+import time, datetime
 import numpy as np
 import pybullet as p
 import argparse
@@ -179,7 +179,7 @@ if __name__ == '__main__':
 
         # two orderings
         results_ordering = {}
-        for ordering in ["random", "nearest_first"]:
+        for ordering in ["nearest_first", "random"]:
             object_order = meta[ordering][0].split(",")
             print(ordering, object_order)
             
@@ -210,6 +210,8 @@ if __name__ == '__main__':
                 print(object_name, RT_obj)
 
                 # transform grasps to robot base
+                print('start checking collision of grasps')
+                start = time.time()
                 n = RT_grasps.shape[0]
                 RT_grasps_world = np.zeros_like(RT_grasps)
                 in_collision = np.zeros((n, ), dtype=np.int32)
@@ -238,14 +240,18 @@ if __name__ == '__main__':
                     # scene.add(pyrender.Mesh.from_points(depth_pc.points))
                     # pyrender.Viewer(scene, use_raymond_lighting=True, point_size=2)
                 
-                RT_grasps_world = RT_grasps_world[in_collision == 0] 
+                RT_grasps_world = RT_grasps_world[in_collision == 0]
+                checking_time = time.time() - start
+                print('Checking grasp collision time', checking_time)
                 print('Among %d grasps, %d in collision, %d collision-free' % (n, np.sum(in_collision), RT_grasps_world.shape[0]))
                 if RT_grasps_world.shape[0] == 0:
                     set_objects.remove(object_name)
-                    results[object_name] = 0
+                    results[object_name] = {'reward': 0, 'plan': None}
                     continue           
 
                 # test IK for remaining grasps
+                print('start IK')
+                start = time.time()
                 n = RT_grasps_world.shape[0]
                 RT_grasps_base = RT_grasps_world.copy()
                 found_ik = np.zeros((n, ), dtype=np.int32)
@@ -259,16 +265,23 @@ if __name__ == '__main__':
                     if err_pos < 0.01 and err_rot < 5:
                         found_ik[i] = 1
                 RT_grasps_world = RT_grasps_world[found_ik == 1] 
-                RT_grasps_base = RT_grasps_base[found_ik == 1] 
+                RT_grasps_base = RT_grasps_base[found_ik == 1]
+                ik_time = time.time() - start
+                print('IK time', ik_time)
                 print('Among %d grasps, %d found IK' % (n, np.sum(found_ik)))
                 if RT_grasps_world.shape[0] == 0:
                     set_objects.remove(object_name)
-                    results[object_name] = 0
+                    results[object_name] = {'reward': 0, 'plan': None}
                     continue
 
                 # plan to a grasp set
                 qc = env.robot.q()
+                print('start planning')
+                start = time.time()
                 plan = planner.plan_goalset(qc, RT_grasps_base, sdf_cost, use_standoff=True, axis_standoff=axis_standoff)
+                planning_time = time.time() - start
+                print('plannnig time', planning_time)
+                
                 if args.vis:
                     visualize_plan(robot, gripper_model, env.base_position, plan, depth_pc, RT_grasps_world)
 
@@ -284,7 +297,8 @@ if __name__ == '__main__':
                 set_objects.remove(object_name)
                 total_success += reward
                 print(f'total reward: {total_success}/{count}')
-                results[object_name] = reward
+                results[object_name] = {'reward': reward, 'plan': plan, 'checking_time': checking_time,
+                                         'ik_time': ik_time, 'planning_time': planning_time}
             results_ordering[ordering] = results
         results_scene[f'{scene_id}'] = results_ordering                
 
@@ -293,6 +307,8 @@ if __name__ == '__main__':
     outdir = "results"
     if not os.path.exists(outdir):
         os.mkdir(outdir)
-    filename = os.path.join(outdir, f'GTO_scenereplica_{robot_name}.json')
+    curr_time = datetime.datetime.now()
+    exp_time = "{:%y-%m-%d_T%H%M%S}".format(curr_time)        
+    filename = os.path.join(outdir, f'GTO_scenereplica_{robot_name}_{exp_time}.json')
     with open(filename, "w") as outfile: 
         json.dump(results_scene, outfile)

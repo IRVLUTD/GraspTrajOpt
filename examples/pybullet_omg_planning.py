@@ -1,47 +1,14 @@
-import os, sys
-import time
+import os
+import time, datetime
 import numpy as np
-import pybullet as p
 import argparse
-import json 
-import matplotlib.pyplot as plt
-from pybullet_api import Fetch, Panda
+import json
 from pybullet_scenereplica import SceneReplicaEnv
 from utils import *
 import _init_paths
 from omg.core import *
 from omg.util import *
 from omg.config import cfg
-from transforms3d.quaternions import mat2quat
-
-import pathlib
-cwd = pathlib.Path(__file__).parent.resolve()  # path to current working directory
-    
-
-def load_grasps(data_dir, robot_name, model):
-
-    if robot_name == 'fetch':
-        # parse grasps
-        grasp_dir = os.path.join(data_dir, "grasp_data", "refined_grasps")
-        grasp_file = os.path.join(grasp_dir, f"fetch_gripper-{model}.json")
-        RT_grasps = parse_grasps(grasp_file)
-    elif robot_name == 'panda':
-        grasp_dir = os.path.join(data_dir, "grasp_data", "panda_simulated")
-        grasp_file = os.path.join(grasp_dir, f"{model}.npy")
-        try:
-            simulator_grasp = np.load(grasp_file, allow_pickle=True)
-            RT_grasps = simulator_grasp.item()["transforms"]
-        except:
-            simulator_grasp = np.load(
-                grasp_file,
-                allow_pickle=True,
-                fix_imports=True,
-                encoding="bytes",
-            )
-            RT_grasps = simulator_grasp.item()[b"transforms"]
-        offset_pose = np.array(rotZ(np.pi / 2))  # and
-        RT_grasps = np.matmul(RT_grasps, offset_pose)  # flip x, y 
-    return RT_grasps  
 
 
 def make_args():
@@ -155,14 +122,24 @@ if __name__ == "__main__":
                 ]            
 
                 scene.env.set_target(object_name)
+                print('start IK')
+                start = time.time()
                 scene.reset(lazy=True)
+                ik_time = time.time() - start
+                print('IK time', ik_time)
+                
+                print('start plannnig')
+                start = time.time()
                 info = scene.step()
+                planning_time = time.time() - start
+                print('plannnig time', planning_time)
                 plan = scene.planner.history_trajectories[-1]
+                plan = plan.T
 
                 if args.vis:
                     scene.fast_debug_vis(interact=int(args.vis), nonstop=True)
 
-                env.robot.execute_plan(plan.T)
+                env.robot.execute_plan(plan)
                 env.robot.close_gripper()
                 time.sleep(1.0)
                 env.retract()
@@ -174,7 +151,7 @@ if __name__ == "__main__":
                 set_objects.remove(object_name)                
                 total_success += reward
                 print(f'total reward: {total_success}/{count}')
-                results[object_name] = reward
+                results[object_name] = {'reward': reward, 'plan': plan, 'ik_time': ik_time, 'planning_time': planning_time}
             results_ordering[ordering] = results
         results_scene[f'{scene_id}'] = results_ordering
 
@@ -184,6 +161,8 @@ if __name__ == "__main__":
     outdir = "results"
     if not os.path.exists(outdir):
         os.mkdir(outdir)
-    filename = os.path.join(outdir, f'OMG_scenereplica_{robot_name}.json')
+    curr_time = datetime.datetime.now()
+    exp_time = "{:%y-%m-%d_T%H%M%S}".format(curr_time)        
+    filename = os.path.join(outdir, f'OMG_scenereplica_{robot_name}_{exp_time}.json')
     with open(filename, "w") as outfile: 
         json.dump(results_scene, outfile)
