@@ -82,6 +82,7 @@ class GTOPlanner:
         tf_gripper = self.fk(Q)
 
         # Cost: reach goal pose
+        tf0 = tf_gripper[0]    # first time step pose
         tf = tf_gripper[self.T - 1]    # last time step pose
         points_tf = tf[:3, :3] @ self.gripper_points.T + tf[:3, 3].reshape((3, 1))
         if use_standoff:
@@ -92,14 +93,15 @@ class GTOPlanner:
             tf_g = tf_goal[:, i].reshape((4, 4)).T
             tf_gripper_goal = tf_g @ self.gripper_tf(Q[:, self.T - 1])
             points_tf_goal = tf_gripper_goal[:3, :3] @ self.gripper_points.T + tf_gripper_goal[:3, 3].reshape((3, 1))
+            cost_prior = 5 * optas.sumsqr(tf0[:3, 3] - tf_gripper_goal[:3, 3])
             # standoff
             if use_standoff:
                 self.pose_standoff = standoff(self.standoff_distance, axis_standoff) 
                 tf_gripper_standoff = tf_g @ self.pose_standoff @ self.gripper_tf(Q[:, self.T + self.standoff_offset])
                 points_standoff_goal = tf_gripper_standoff[:3, :3] @ self.gripper_points.T + tf_gripper_standoff[:3, 3].reshape((3, 1))
-                cost[i] = optas.sumsqr(points_tf - points_tf_goal) + optas.sumsqr(points_standoff - points_standoff_goal)
+                cost[i] = optas.sumsqr(points_tf - points_tf_goal) + optas.sumsqr(points_standoff - points_standoff_goal) + cost_prior
             else:
-                cost[i] = optas.sumsqr(points_tf - points_tf_goal)
+                cost[i] = optas.sumsqr(points_tf - points_tf_goal) + cost_prior
         builder.add_cost_term("cost_pos", optas.mmin(cost))
 
         # Cost: obstacle avoidance

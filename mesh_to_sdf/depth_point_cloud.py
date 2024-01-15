@@ -71,7 +71,7 @@ class DepthPointCloud:
         distances[inside] *= -1
         # cost
         cost = np.zeros_like(distances)
-        cost[inside] = -distances[inside] + epsilon / 2
+        cost[inside] = -100 * distances[inside] + epsilon / 2
         index = (distances > 0) & (distances < epsilon)
         cost[index] = np.square(distances[index] - epsilon) / (2 * epsilon)
         print('done')

@@ -135,6 +135,7 @@ if __name__ == '__main__':
     ik_solver = IKSolver(robot, link_ee, link_gripper)   
     
     total_success = 0
+    count = 0
     results_scene = {}
     for scene_id in env.all_scene_ids:
         print(f'=====================Scene {scene_id}========================')
@@ -142,7 +143,7 @@ if __name__ == '__main__':
 
         # two orderings
         results_ordering = {}
-        for ordering in ["nearest_first", "random"]:
+        for ordering in ["random", "nearest_first"]:
             object_order = meta[ordering][0].split(",")
             print(ordering, object_order)
             
@@ -150,6 +151,7 @@ if __name__ == '__main__':
             results = {}
             set_objects = set(object_order)
             for object_name in object_order:
+                count += 1
                 print(object_name)
                 # reset scene
                 env.reset_scene(set_objects)
@@ -263,12 +265,13 @@ if __name__ == '__main__':
                 time.sleep(1.0)
                 env.retract(retract_distance)
                 reward = env.compute_reward(object_name)
-                print('reward:', reward)
+                print(f'scene: {scene_id}, order: {ordering}, object: {object_name}, reward: {reward}')
                 # retract
                 env.reset_objects(object_name)
                 env.robot.retract()
                 set_objects.remove(object_name)
                 total_success += reward
+                print(f'total reward: {total_success}/{count}')
                 results[object_name] = reward
             results_ordering[ordering] = results
         results_scene[f'{scene_id}'] = results_ordering                

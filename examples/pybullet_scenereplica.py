@@ -191,7 +191,9 @@ class SceneReplicaEnv():
         # reset scene
         for obj in set_objects:
             pos, orn = self.meta_poses[obj]
-            self.set_object_pose(obj, pos, orn)        
+            self.set_object_pose(obj, pos, orn)
+        for _ in range(100):
+            p.stepSimulation()    
 
 
     def _add_mesh(self, obj_file, trans, quat, scale=1):
