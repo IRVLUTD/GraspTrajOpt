@@ -72,7 +72,7 @@ class SceneReplicaEnv():
             self.cid = p.connect(p.SHARED_MEMORY)
             if (self.cid < 0):
                 self.cid = p.connect(p.GUI)
-            p.resetDebugVisualizerCamera(2.0, 90.0, -41.0, [0.45, 0, 0.75])
+            p.resetDebugVisualizerCamera(1.5, 90.0, -41.0, [0.45, 0, 0.45])
         else:
             self.cid = p.connect(p.DIRECT)
 
@@ -125,6 +125,13 @@ class SceneReplicaEnv():
         self.table_id = p.loadURDF(table_file, self.table_pos)
         self.table_height = 0.75
         self.light_position = np.array([-1.0, 0, 2.5])
+        p.changeDynamics(
+            self.table_id,
+            -1,
+            spinningFriction=1.0,
+            rollingFriction=1.0,
+            lateralFriction=1.0,
+        )
 
 
     def cache_objects(self):

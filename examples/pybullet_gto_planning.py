@@ -100,7 +100,7 @@ if __name__ == '__main__':
         arm_height = 1.1
         gripper_open_offsets = [0.05, 0.05]
         axis_standoff = 'x'
-        retract_distance = 0.4
+        retract_distance = 0.6
     elif robot_name == 'panda':
         param_joints = ['panda_finger_joint1', 'panda_finger_joint2']
         collision_link_names = None  # all links
