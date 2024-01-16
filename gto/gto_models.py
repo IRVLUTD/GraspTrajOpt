@@ -108,7 +108,7 @@ class GTORobotModel(RobotModel):
         self.zlim = [0, arm_height + arm_len]
 
         self.field_margin = 0.2
-        self.grid_resolution = 0.02
+        self.grid_resolution = 0.05
         self.origin = np.array([self.xlim[0] - self.field_margin, self.ylim[0] - self.field_margin, self.zlim[0] - self.field_margin]).reshape((1, 3))
         workspace_points = np.array(np.meshgrid(
                                 np.arange(self.xlim[0] - self.field_margin, self.xlim[1] + self.field_margin, self.grid_resolution),

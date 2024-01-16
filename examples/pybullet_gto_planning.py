@@ -77,7 +77,7 @@ def visualize_plan(robot, gripper_model, base_position, plan, depth_pc, RT_grasp
     vis.start()
 
 
-def debug_plan(robot, base_position, plan, depth_pc, sdf_cost):
+def debug_plan(robot, gripper_model, base_position, plan, depth_pc, sdf_cost, RT_grasps_world):
     T = plan.shape[1]
     for i in range(35, T):
         q = plan[:, i]
@@ -98,6 +98,20 @@ def debug_plan(robot, base_position, plan, depth_pc, sdf_cost):
             q=q,
             alpha = 1,
         )
+        q = [0, 0]
+        for i in range(RT_grasps_world.shape[0]):
+            RT = RT_grasps_world[i]
+            position = RT[:3, 3]
+            # scalar-last (x, y, z, w) format in optas
+            quat = mat2quat(RT[:3, :3])
+            orientation = [quat[1], quat[2], quat[3], quat[0]]
+            vis.robot(
+                gripper_model,
+                base_position=position,
+                base_orientation=orientation,
+                q=q,
+                alpha = 0.3,
+            )        
         vis.start()      
 
 
@@ -221,7 +235,7 @@ if __name__ == '__main__':
                 target_mask = mask == idx
                 depth_pc = DepthPointCloud(depth, intrinsic_matrix, cam_pose, target_mask)
                 world_points = robot.workspace_points + env.base_position.reshape((1, 3))
-                sdf_cost = depth_pc.get_sdf_cost(world_points, epsilon=0.05)
+                sdf_cost = depth_pc.get_sdf_cost(world_points)
 
                 # load grasps
                 RT_grasps = load_grasps(data_dir, robot_name, object_name)
@@ -308,8 +322,6 @@ if __name__ == '__main__':
                 if args.vis:
                     visualize_plan(robot, gripper_model, env.base_position, plan, depth_pc, RT_grasps_world)
 
-                # debug_plan(robot, env.base_position, plan, depth_pc, sdf_cost)
-
                 env.robot.execute_plan(plan)
                 env.robot.close_gripper()
                 time.sleep(1.0)
@@ -324,6 +336,8 @@ if __name__ == '__main__':
                 print(f'total reward: {total_success}/{count}')
                 results[object_name] = {'reward': reward, 'plan': plan.tolist(), 'checking_time': checking_time,
                                          'ik_time': ik_time, 'planning_time': planning_time}
+                
+                # debug_plan(robot, gripper_model, env.base_position, plan, depth_pc, sdf_cost, RT_grasps_world)
                 
                 
 
