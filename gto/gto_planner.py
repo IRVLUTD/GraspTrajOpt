@@ -119,7 +119,7 @@ class GTOPlanner:
                         points_base_all = optas.horzcat(points_base_all, point_base)
             points_base_all = points_base_all.T
             offsets = self.robot.points_to_offsets(points_base_all)
-            builder.add_cost_term("cost_sdf", 10 * optas.sumsqr(sdf_cost[offsets]))
+            builder.add_cost_term("cost_sdf", 5 * optas.sum1(sdf_cost[offsets]))
 
         # Cost: minimize joint velocity
         dQ = builder.get_robot_states_and_parameters(self.robot_name, time_deriv=1)
@@ -133,8 +133,8 @@ class GTOPlanner:
         self.solver = optas.CasADiSolver(builder.build()).setup("ipopt", solver_options=solver_options)
 
 
-    def plan(self, qc, RT, sdf_cost, use_standoff=False):
-        self.setup_optimization(goal_size=1, use_standoff=use_standoff)
+    def plan(self, qc, RT, sdf_cost, use_standoff=True, axis_standoff='x'):
+        self.setup_optimization(goal_size=1, use_standoff=use_standoff, axis_standoff=axis_standoff)
         tf_goal = np.zeros((16, 1))
         tf_goal[:, 0] = RT.flatten()
 
@@ -160,12 +160,11 @@ class GTOPlanner:
 
         # Get robot configuration
         Q = solution[f"{self.robot_name}/q"]
-        return Q.toarray()
+        cost = solution["f"]
+        return Q.toarray(), cost.toarray().flatten()
     
 
     def plan_goalset(self, qc, RTs, sdf_cost, use_standoff=True, axis_standoff='x'):
-        self.setup_optimization(use_standoff, axis_standoff)
-
         n = RTs.shape[0]
         self.setup_optimization(goal_size=n, use_standoff=use_standoff, axis_standoff=axis_standoff)
         tf_goal = np.zeros((16, n))
@@ -195,7 +194,8 @@ class GTOPlanner:
 
         # Get robot configuration
         Q = solution[f"{self.robot_name}/q"]
-        return Q.toarray()   
+        cost = solution["f"]
+        return Q.toarray(), cost.toarray().flatten()
 
 
 def make_args():
