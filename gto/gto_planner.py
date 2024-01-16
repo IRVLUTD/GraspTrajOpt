@@ -129,7 +129,7 @@ class GTOPlanner:
         builder.enforce_model_limits(self.robot_name)  # joint limits extracted from URDF        
 
         # Setup solver
-        solver_options = {'ipopt': {'max_iter': 200}}
+        solver_options = {'ipopt': {'max_iter': 100}}
         self.solver = optas.CasADiSolver(builder.build()).setup("ipopt", solver_options=solver_options)
 
 

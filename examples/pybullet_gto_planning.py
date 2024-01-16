@@ -81,16 +81,17 @@ def debug_plan(robot, base_position, plan, depth_pc, sdf_cost):
     T = plan.shape[1]
     for i in range(35, T):
         q = plan[:, i]
-
         points_base, _ = robot.compute_fk_surface_points(q)
         offset = robot.points_to_offsets_numpy(points_base).astype(int)
-        cost = np.sum(sdf_cost[offset])
-        print(f'time step {q}, sdf cost {cost}')
+        cost = np.sum(sdf_cost[offset])    
+        print(f'time step {i}, sdf cost {cost}')
 
         vis = Visualizer(camera_position=[3, 0, 3])
         vis.grid_floor()
-        vis.points(depth_pc.points)
-        vis.points(points_base, rgb=[1, 1, 0], size=5)
+        vis.points(depth_pc.points, rgb=[0, 1, 0])
+        index = sdf_cost[offset] > 0
+        vis.points(points_base[~index], rgb=[0, 1, 1], size=5)
+        vis.points(points_base[index], rgb=[1, 0, 0], size=5)
         vis.robot(
             robot,
             base_position=base_position,
@@ -307,6 +308,8 @@ if __name__ == '__main__':
                 if args.vis:
                     visualize_plan(robot, gripper_model, env.base_position, plan, depth_pc, RT_grasps_world)
 
+                # debug_plan(robot, env.base_position, plan, depth_pc, sdf_cost)
+
                 env.robot.execute_plan(plan)
                 env.robot.close_gripper()
                 time.sleep(1.0)
@@ -322,7 +325,7 @@ if __name__ == '__main__':
                 results[object_name] = {'reward': reward, 'plan': plan.tolist(), 'checking_time': checking_time,
                                          'ik_time': ik_time, 'planning_time': planning_time}
                 
-                debug_plan(robot, env.base_position, plan, depth_pc, sdf_cost)
+                
 
             results_ordering[ordering] = results
         results_scene[f'{scene_id}'] = results_ordering                

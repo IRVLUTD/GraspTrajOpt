@@ -78,7 +78,7 @@ class AnimationCallback:
 
 class VtkPointCloud:
 
-    def __init__(self, zMin=-10.0, zMax=10.0, maxNumPoints=1e6):
+    def __init__(self, zMin=-10.0, zMax=10.0, maxNumPoints=1e9):
         self.maxNumPoints = maxNumPoints
         self.vtkPolyData = vtk.vtkPolyData()
         self.clearPoints()
