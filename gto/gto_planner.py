@@ -1,4 +1,3 @@
-from doctest import FAIL_FAST
 import os
 import sys
 import pathlib
@@ -229,6 +228,7 @@ if __name__ == "__main__":
         link_gripper = 'gripper_link'       
         arm_len = 1.1
         arm_height = 1.1
+        default_conf = [0.0, 0.0, 0.38, 0.009195, 0.908270, 1.32, 0.7, 0.0, -2.0, 0.0, -0.57, 0.0, 0.0, 0.0 , 0.0]
 
         RT = np.array([[-0.05241979, -0.45344928, -0.88973933,  0.41363978],
             [-0.27383122, -0.8502871,   0.44947574,  0.12551154],
@@ -242,6 +242,7 @@ if __name__ == "__main__":
         link_gripper = 'panda_hand'
         arm_len = 1.0
         arm_height = 0
+        default_conf = [0.0, -1.285, 0, -2.356, 0.0, 1.571, 0.785, 0.04, 0.04]
 
         RT = np.array([[-0.61162336,  0.79089652,  0.01998741,  0.46388378],
             [ 0.7883297,   0.6071185,   0.09971584, -0.15167381],
@@ -268,8 +269,8 @@ if __name__ == "__main__":
 
     # Plan trajectory
     sdf_cost = np.zeros(robot.field_size)
-    qc = default_pose(robot)
-    plan = planner.plan(qc, RT, sdf_cost)
+    qc = np.array(default_conf)
+    plan, cost = planner.plan(qc, RT, sdf_cost)
     print(plan.shape)
 
     lo = robot.lower_actuated_joint_limits.toarray()
