@@ -118,7 +118,6 @@ class GTOPlanner:
                         points_base_all = optas.horzcat(points_base_all, point_base)
             points_base_all = points_base_all.T
             offsets = self.robot.points_to_offsets(points_base_all)
-            # builder.add_cost_term("cost_sdf", 5 * optas.sum1(sdf_cost[offsets]))
             builder.add_geq_inequality_constraint('obstacle', sdf_cost[offsets])
 
         # Cost: minimize joint velocity
