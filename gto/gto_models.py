@@ -14,6 +14,7 @@ from optas.spatialmath import rt2tr, rpy2r, ArrayType
 from optas.models import RobotModel
 from optas.visualize import Visualizer
 
+
 cwd = pathlib.Path(__file__).parent.resolve()  # path to current working directory
 
 
@@ -122,7 +123,6 @@ class GTORobotModel(RobotModel):
         print('workspace field shape', self.field_shape)
         print('workspace field', self.field_size)
         print('workspace points', self.workspace_points.shape)
-        sys.exit(1)
 
 
     def points_to_offsets(self, points):
