@@ -103,9 +103,9 @@ class GTOPlanner:
                 cost[i] = optas.sumsqr(points_tf - points_tf_goal) + cost_prior
         builder.add_cost_term("cost_pos", optas.mmin(cost))
 
-        # Cost: obstacle avoidance
+        # obstacle avoidance
         if self.collision_avoidance:
-            points_base_all = None            
+            points_base_all = None
             for i in range(self.T):
                 q = Q[:, i]
                 for name in self.robot.surface_pc_map.keys():
@@ -118,7 +118,8 @@ class GTOPlanner:
                         points_base_all = optas.horzcat(points_base_all, point_base)
             points_base_all = points_base_all.T
             offsets = self.robot.points_to_offsets(points_base_all)
-            builder.add_cost_term("cost_sdf", 5 * optas.sum1(sdf_cost[offsets]))
+            # builder.add_cost_term("cost_sdf", 5 * optas.sum1(sdf_cost[offsets]))
+            builder.add_geq_inequality_constraint('obstacle', sdf_cost[offsets])
 
         # Cost: minimize joint velocity
         dQ = builder.get_robot_states_and_parameters(self.robot_name, time_deriv=1)
