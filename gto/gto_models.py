@@ -118,8 +118,11 @@ class GTORobotModel(RobotModel):
         self.field_shape = workspace_points.shape[1:]
         self.workspace_points = workspace_points.reshape((3, -1)).T
         self.field_size = self.workspace_points.shape[0]
+        print('origin', self.origin)
+        print('workspace field shape', self.field_shape)
         print('workspace field', self.field_size)
         print('workspace points', self.workspace_points.shape)
+        sys.exit(1)
 
 
     def points_to_offsets(self, points):
