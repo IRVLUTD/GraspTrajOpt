@@ -77,21 +77,26 @@ def visualize_plan(robot, gripper_model, base_position, plan, depth_pc, RT_grasp
     vis.start()
 
 
-def debug_plan(robot, gripper_model, base_position, plan, depth_pc, sdf_cost, RT_grasps_world, show_grasp=True):
+def debug_plan(robot, gripper_model, base_position, plan, depth_pc, sdf_distances, RT_grasps_world, show_grasp=True):
     T = plan.shape[1]
-    for i in range(35, T):
+    for i in range(47, T):
         q = plan[:, i]
         points_base, _ = robot.compute_fk_surface_points(q)
         offset = robot.points_to_offsets_numpy(points_base).astype(int)
-        cost = np.sum(sdf_cost[offset])    
+        cost = np.sum(sdf_distances[offset])    
         print(f'time step {i}, sdf cost {cost}')
 
+        workspace_points = robot.workspace_points + base_position.reshape((1, 3))
+        points_world = points_base + base_position.reshape((1, 3))
         vis = Visualizer(camera_position=[3, 0, 3])
         vis.grid_floor()
-        vis.points(depth_pc.points, rgb=[0, 1, 0])
-        index = sdf_cost[offset] > 0
-        vis.points(points_base[~index], rgb=[0, 1, 1], size=5)
-        vis.points(points_base[index], rgb=[1, 0, 0], size=5)
+        vis.points(depth_pc.points, rgb=[1, 1, 1])
+        index = sdf_distances[offset] > 0
+        vis.points(points_world[~index], rgb=[0, 1, 1], size=5)
+        vis.points(points_world[index], rgb=[1, 0, 0], size=5)
+        index = sdf_distances > 0
+        vis.points(workspace_points[~index], rgb=[1, 1, 0], size=3)
+        # vis.points(workspace_points[index], rgb=[0, 1, 0], size=10)        
         vis.robot(
             robot,
             base_position=base_position,
@@ -234,9 +239,11 @@ if __name__ == '__main__':
                 rgba, depth, mask, cam_pose, intrinsic_matrix = env.get_observation()
                 idx = env.object_uids[env.object_names.index(object_name)]
                 target_mask = mask == idx
+                depth[target_mask] = 2.0
                 depth_pc = DepthPointCloud(depth, intrinsic_matrix, cam_pose, target_mask)
                 world_points = robot.workspace_points + env.base_position.reshape((1, 3))
-                sdf_cost = depth_pc.get_sdf_cost(world_points)
+                # use sdf distances
+                sdf_distances = depth_pc.get_sdf(world_points)
 
                 # load grasps
                 RT_grasps = load_grasps(data_dir, robot_name, object_name)
@@ -316,8 +323,8 @@ if __name__ == '__main__':
                 qc = env.robot.q()
                 print('start planning')
                 start = time.time()
-                plan, cost = planner.plan_goalset(qc, RT_grasps_base, sdf_cost, use_standoff=True, axis_standoff=axis_standoff)
-                # plan, cost = planner.plan(qc, RT_grasps_base[0], sdf_cost, use_standoff=True, axis_standoff=axis_standoff)
+                plan, cost = planner.plan_goalset(qc, RT_grasps_base, sdf_distances, use_standoff=True, axis_standoff=axis_standoff)
+                # plan, cost = planner.plan(qc, RT_grasps_base[0], sdf_distances, use_standoff=True, axis_standoff=axis_standoff)
                 planning_time = time.time() - start
                 print('plannnig time', planning_time, 'cost', cost)
                 
@@ -339,7 +346,7 @@ if __name__ == '__main__':
                 results[object_name] = {'reward': reward, 'plan': plan.tolist(), 'checking_time': checking_time,
                                          'ik_time': ik_time, 'planning_time': planning_time}
                 
-                # debug_plan(robot, gripper_model, env.base_position, plan, depth_pc, sdf_cost, RT_grasps_world, show_grasp=False)
+                debug_plan(robot, gripper_model, env.base_position, plan, depth_pc, sdf_distances, RT_grasps_world, show_grasp=False)
                 
                 
 
