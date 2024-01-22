@@ -243,7 +243,7 @@ if __name__ == '__main__':
                 depth_pc = DepthPointCloud(depth, intrinsic_matrix, cam_pose, target_mask)
                 world_points = robot.workspace_points + env.base_position.reshape((1, 3))
                 # use sdf distances
-                sdf_distances = depth_pc.get_sdf(world_points)
+                sdf_distances = depth_pc.get_sdf_cost(world_points)
 
                 # load grasps
                 RT_grasps = load_grasps(data_dir, robot_name, object_name)
