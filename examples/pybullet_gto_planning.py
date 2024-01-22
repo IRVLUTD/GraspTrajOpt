@@ -350,9 +350,7 @@ if __name__ == '__main__':
                 results[object_name] = {'reward': reward, 'plan': plan.tolist(), 'checking_time': checking_time,
                                          'ik_time': ik_time, 'planning_time': planning_time}
                 
-                debug_plan(robot, gripper_model, env.base_position, plan, depth_pc, sdf_distances, RT_grasps_world, show_grasp=False)
-                
-                
+                # debug_plan(robot, gripper_model, env.base_position, plan, depth_pc, sdf_distances, RT_grasps_world, show_grasp=False)
 
             results_ordering[ordering] = results
         results_scene[f'{scene_id}'] = results_ordering                

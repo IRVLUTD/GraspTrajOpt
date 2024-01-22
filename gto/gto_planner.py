@@ -120,7 +120,7 @@ class GTOPlanner:
             points_base_all = points_base_all.T
             offsets = self.robot.points_to_offsets(points_base_all)
             # builder.add_eq_inequality_constraint('obstacle', sdf_distances[offsets])
-            builder.add_cost_term("cost_obstacle", optas.sum1(sdf_distances[offsets]))
+            builder.add_cost_term("cost_obstacle", optas.sumsqr(sdf_distances[offsets]))
 
         # Cost: minimize joint velocity
         dQ = builder.get_robot_states_and_parameters(self.robot_name, time_deriv=1)
