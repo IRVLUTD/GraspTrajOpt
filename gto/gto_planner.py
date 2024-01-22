@@ -12,9 +12,10 @@ import casadi as cs
 from optas.visualize import Visualizer
 from optas.spatialmath import standoff
 from gto.gto_models import GTORobotModel
+from gto.ik_solver import IKSolver
 from transforms3d.quaternions import mat2quat
 from optas.spatialmath import standoff
-from utils import *
+from gto.utils import interpolate_waypoints
 
 
 class GTOPlanner:
@@ -122,7 +123,7 @@ class GTOPlanner:
 
         # Cost: minimize joint velocity
         dQ = builder.get_robot_states_and_parameters(self.robot_name, time_deriv=1)
-        builder.add_cost_term("min_join_vel", 0.1 * optas.sumsqr(dQ))
+        builder.add_cost_term("min_join_vel", 0.01 * optas.sumsqr(dQ))
 
         # Constraint: joint position limits
         builder.enforce_model_limits(self.robot_name)  # joint limits extracted from URDF        
@@ -132,13 +133,20 @@ class GTOPlanner:
         self.solver = optas.CasADiSolver(builder.build()).setup("ipopt", solver_options=solver_options)
 
 
-    def plan(self, qc, RT, sdf_distances, use_standoff=True, axis_standoff='x'):
+    def plan(self, qc, RT, sdf_distances, q_solution=None, use_standoff=True, axis_standoff='x'):
         self.setup_optimization(goal_size=1, use_standoff=use_standoff, axis_standoff=axis_standoff)
         tf_goal = np.zeros((16, 1))
         tf_goal[:, 0] = RT.flatten()
 
         # Set initial seed, note joint velocity will be set to zero
-        Q0 = optas.diag(qc) @ optas.DM.ones(self.robot.ndof, self.T)
+        if q_solution is None:
+            Q0 = optas.diag(qc) @ optas.DM.ones(self.robot.ndof, self.T)
+        else:
+            # interpolate waypoints
+            data = interpolate_waypoints(np.stack([qc, q_solution]), self.T, self.robot.ndof)
+            index = np.array(self.robot.parameter_joint_indexes).astype(np.int32)
+            data[:, index] = np.array(qc)[index]
+            Q0 = optas.DM(data.T)
 
         self.solver.reset_initial_seed(
             {f"{self.robot_name}/q/x": self.robot.extract_optimized_dimensions(Q0)}
@@ -163,7 +171,7 @@ class GTOPlanner:
         return Q.toarray(), cost.toarray().flatten()
     
 
-    def plan_goalset(self, qc, RTs, sdf_distances, use_standoff=True, axis_standoff='x'):
+    def plan_goalset(self, qc, RTs, sdf_distances, q_solutions=None, use_standoff=True, axis_standoff='x'):
         n = RTs.shape[0]
         self.setup_optimization(goal_size=n, use_standoff=use_standoff, axis_standoff=axis_standoff)
         tf_goal = np.zeros((16, n))
@@ -171,7 +179,17 @@ class GTOPlanner:
             RT = RTs[i]
             tf_goal[:, i] = RT.flatten()
 
-        Q0 = optas.diag(qc) @ optas.DM.ones(self.robot.ndof, self.T)
+        if q_solutions is None:
+            Q0 = optas.diag(qc) @ optas.DM.ones(self.robot.ndof, self.T)
+        else:
+            # sample a goal
+            index = np.random.randint(n)
+            q_solution = q_solutions[:, index]
+            # interpolate waypoints
+            data = interpolate_waypoints(np.stack([qc, q_solution]), self.T, self.robot.ndof)
+            index = np.array(self.robot.parameter_joint_indexes).astype(np.int32)
+            data[:, index] = np.array(qc)[index]
+            Q0 = optas.DM(data.T)
 
         # Set initial seed, note joint velocity will be set to zero
         self.solver.reset_initial_seed(
@@ -225,7 +243,8 @@ if __name__ == "__main__":
                     "elbow_flex_link", "forearm_roll_link", "wrist_flex_link", "wrist_roll_link", "gripper_link",
                     "l_gripper_finger_link", "r_gripper_finger_link"]
         link_ee = "wrist_roll_link"  # end-effector link name
-        link_gripper = 'gripper_link'       
+        link_gripper = 'gripper_link'
+        axis_standoff = 'x' 
         arm_len = 1.1
         arm_height = 1.1
         default_conf = [0.0, 0.0, 0.38, 0.009195, 0.908270, 1.32, 0.7, 0.0, -2.0, 0.0, -0.57, 0.0, 0.0, 0.0 , 0.0]
@@ -240,6 +259,7 @@ if __name__ == "__main__":
         collision_link_names = None  # all links
         link_ee = "panda_hand"     # end-effector link name
         link_gripper = 'panda_hand'
+        axis_standoff = 'z'
         arm_len = 1.1
         arm_height = 0
         default_conf = [0.0, -1.285, 0.0, -2.356, 0.0, 1.571, 0.785, 0.0, 0.0]
@@ -266,11 +286,15 @@ if __name__ == "__main__":
 
     # Initialize planner
     planner = GTOPlanner(robot, link_ee, link_gripper)
-
-    # Plan trajectory
     sdf_distances = np.zeros(robot.field_size)
     qc = np.array(default_conf)
-    plan, cost = planner.plan(qc, RT, sdf_distances)
+
+    # solve IK first
+    ik_solver = IKSolver(robot, link_ee, link_gripper)
+    q_solution, err_pos, err_rot = ik_solver.solve_ik(qc.reshape(-1, 1), RT)
+
+    # Plan trajectory 
+    plan, cost = planner.plan(qc, RT, sdf_distances, q_solution, use_standoff=True, axis_standoff=axis_standoff)
     print(plan.shape)
 
     lo = robot.lower_actuated_joint_limits.toarray()

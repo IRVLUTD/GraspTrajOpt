@@ -301,19 +301,23 @@ if __name__ == '__main__':
                 RT_grasps_base = RT_grasps_world.copy()
                 found_ik = np.zeros((n, ), dtype=np.int32)
                 q0 = np.array(env.robot.q()).reshape((env.robot.ndof, 1))
+                q_solutions = np.zeros((robot.ndof, n), dtype=np.float32)
                 for i in range(n):
                     RT = RT_grasps_world[i].copy()
                     # change world to robot base
                     RT[:3, 3] -= env.base_position
                     RT_grasps_base[i] = RT.copy()
                     q_solution, err_pos, err_rot = ik_solver.solve_ik(q0, RT)
+                    q_solutions[:, i] = q_solution
                     if err_pos < 0.01 and err_rot < 5:
                         found_ik[i] = 1
                 RT_grasps_world = RT_grasps_world[found_ik == 1] 
                 RT_grasps_base = RT_grasps_base[found_ik == 1]
+                q_solutions = q_solutions[:, found_ik == 1]
                 ik_time = time.time() - start
                 print('IK time', ik_time)
                 print('Among %d grasps, %d found IK' % (n, np.sum(found_ik)))
+                print('IK solutions with shape', q_solutions.shape)
                 if RT_grasps_world.shape[0] == 0:
                     set_objects.remove(object_name)
                     results[object_name] = {'reward': 0, 'plan': None}
@@ -323,8 +327,8 @@ if __name__ == '__main__':
                 qc = env.robot.q()
                 print('start planning')
                 start = time.time()
-                plan, cost = planner.plan_goalset(qc, RT_grasps_base, sdf_distances, use_standoff=True, axis_standoff=axis_standoff)
-                # plan, cost = planner.plan(qc, RT_grasps_base[0], sdf_distances, use_standoff=True, axis_standoff=axis_standoff)
+                plan, cost = planner.plan_goalset(qc, RT_grasps_base, sdf_distances, q_solutions, use_standoff=True, axis_standoff=axis_standoff)
+                # plan, cost = planner.plan(qc, RT_grasps_base[0], sdf_distances, q_solutions[:, 0], use_standoff=True, axis_standoff=axis_standoff)
                 planning_time = time.time() - start
                 print('plannnig time', planning_time, 'cost', cost)
                 

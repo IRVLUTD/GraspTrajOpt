@@ -56,7 +56,8 @@ class GTORobotModel(RobotModel):
                 print(filename)
 
                 mesh = trimesh.load(filename)
-                surface_pc = mesh_to_sdf.get_surface_point_cloud(mesh, surface_point_method='sample', bounding_radius=1, scan_count=100, scan_resolution=400, sample_point_count=100, calculate_normals=True)
+                surface_pc = mesh_to_sdf.get_surface_point_cloud(mesh, surface_point_method='sample', bounding_radius=1, 
+                                                                 scan_count=100, scan_resolution=400, sample_point_count=100, calculate_normals=True)
                 surface_pc_map[name] = surface_pc
                 print('surface points', surface_pc.points.shape)
         return surface_pc_map

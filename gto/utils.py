@@ -1,7 +1,7 @@
 import json
 import numpy as np
 from transforms3d.quaternions import quat2mat
-
+from scipy import interpolate
 
 def default_pose(robot_model):
     # set robot pose
@@ -28,3 +28,25 @@ def default_pose(robot_model):
         joint_command = np.array([0.0, -1.285, 0, -2.356, 0.0, 1.571, 0.785, 0.0, 0.0])
 
     return joint_command
+
+
+def interpolate_waypoints(waypoints, n, m, mode="cubic"):  # linear
+    """
+    Interpolate the waypoints using interpolation.
+    """
+    data = np.zeros([n, m])
+    x = np.linspace(0, 1, waypoints.shape[0])
+    for i in range(waypoints.shape[1]):
+        y = waypoints[:, i]
+
+        t = np.linspace(0, 1, n + 2)
+        if mode == "linear":  # clamped cubic spline
+            f = interpolate.interp1d(x, y, "linear")
+        if mode == "cubic":  # clamped cubic spline
+            f = interpolate.CubicSpline(x, y, bc_type="clamped")
+        elif mode == "quintic":  # seems overkill to me
+            pass
+        data[:, i] = f(t[1:-1])  #
+        # plt.plot(x, y, 'o', t[1:-1], data[:, i], '-') #  f(np.linspace(0, 1, 5 * n+2))
+        # plt.show()
+    return data

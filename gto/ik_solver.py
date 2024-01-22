@@ -71,10 +71,10 @@ class IKSolver:
 
         print("***********************************") 
         print("Casadi IK solution:")
-        print(q)
+        print(q, q.shape)
         print('position error', err_pos)
         print('rotation error in degree', err_rot)
-        return q, err_pos, err_rot
+        return q.toarray().flatten(), err_pos, err_rot
 
 
 def make_args():
