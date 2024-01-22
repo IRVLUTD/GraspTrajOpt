@@ -83,7 +83,7 @@ def debug_plan(robot, gripper_model, base_position, plan, depth_pc, sdf_distance
         q = plan[:, i]
         points_base, _ = robot.compute_fk_surface_points(q)
         offset = robot.points_to_offsets_numpy(points_base).astype(int)
-        cost = np.sum(sdf_distances[offset])    
+        cost = np.sum(sdf_distances[offset])
         print(f'time step {i}, sdf cost {cost}')
 
         workspace_points = robot.workspace_points + base_position.reshape((1, 3))
