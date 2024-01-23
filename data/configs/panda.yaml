@@ -1,0 +1,32 @@
+robot_cfg:
+  robot_name: panda
+  urdf_robot_path: "data/robots/panda/panda.urdf"
+  urdf_gripper_path: "data/robots/panda/panda_gripper.urdf"
+  base_link: "base_link"
+  link_ee: "panda_hand"
+  link_gripper: "panda_hand"
+  axis_standoff: 'z'
+  retract_distance: 0.3
+  gripper_open_offsets: [0.04, 0.04]
+  arm_len: 1.0
+  arm_height: 0
+  default_pose: [0.0, -1.285, 0, -2.356, 0.0, 1.571, 0.785, 0.0, 0.0]
+  collision_link_names:
+    [
+      "panda_link0",
+      "panda_link1",
+      "panda_link2",
+      "panda_link3",
+      "panda_link4",
+      "panda_link5",
+      "panda_link6",
+      "panda_link7",
+      "panda_hand",
+      "panda_leftfinger",
+      "panda_rightfinger",
+    ]
+  param_joints:
+    [
+      'panda_finger_joint1',
+      'panda_finger_joint2'
+    ]

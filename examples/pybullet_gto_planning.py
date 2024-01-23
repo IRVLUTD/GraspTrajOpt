@@ -14,10 +14,8 @@ from optas.visualize import Visualizer
 from gto.gto_models import GTORobotModel
 from gto.gto_planner import GTOPlanner
 from gto.ik_solver import IKSolver
+from gto.utils import load_yaml, get_root_dir
 from transforms3d.quaternions import mat2quat
-
-import pathlib
-cwd = pathlib.Path(__file__).parent.resolve()  # path to current working directory
     
 
 def load_grasps(data_dir, robot_name, model):
@@ -157,45 +155,28 @@ if __name__ == '__main__':
     robot_name = args.robot
     data_dir = args.data_dir
     scene_id = args.scene_id
+
+    # load config file
+    root_dir = get_root_dir()
+    config_file = os.path.join(root_dir, 'data', 'configs', f'{robot_name}.yaml')
+    if not os.path.exists(config_file):
+        print(f'robot {robot_name} not supported', config_file)
+        sys.exit(1) 
+    cfg = load_yaml(config_file)['robot_cfg']
+    print(cfg)    
     
     # load robot model
-    robot_model_dir = os.path.join(cwd, "robots", robot_name)
-    urdf_filename = os.path.join(robot_model_dir, f"{robot_name}.urdf")
+    robot_model_dir = os.path.join(root_dir, 'data', 'robots', cfg['robot_name'])
+    urdf_filename = os.path.join(root_dir, cfg['urdf_robot_path']) 
     # define the standoff pose for collision checking
     offset = -0.01    
-    if robot_name == 'fetch':
-        param_joints = ['r_wheel_joint', 'l_wheel_joint', 'torso_lift_joint', 'head_pan_joint', 'head_tilt_joint', 
-                        'r_gripper_finger_joint', 'l_gripper_finger_joint', 'bellows_joint']
-        collision_link_names = ["shoulder_pan_link", "shoulder_lift_link", "upperarm_roll_link",
-                    "elbow_flex_link", "forearm_roll_link", "wrist_flex_link", "wrist_roll_link", "gripper_link",
-                    "l_gripper_finger_link", "r_gripper_finger_link"]
-        link_ee = "wrist_roll_link"  # end-effector link name
-        link_gripper = 'gripper_link'       
-        arm_len = 1.1
-        arm_height = 1.1
-        gripper_open_offsets = [0.05, 0.05]
-        axis_standoff = 'x'
-        retract_distance = 0.6
-    elif robot_name == 'panda':
-        param_joints = ['panda_finger_joint1', 'panda_finger_joint2']
-        collision_link_names = None  # all links
-        link_ee = "panda_hand"     # end-effector link name
-        link_gripper = 'panda_hand'
-        arm_len = 1.0
-        arm_height = 0
-        gripper_open_offsets = [0.04, 0.04]
-        axis_standoff = 'z'
-        retract_distance = 0.3
-    else:
-        print(f'robot {robot_name} not supported')
-        sys.exit(1)
 
     robot = GTORobotModel(robot_model_dir,
                           urdf_filename=urdf_filename, 
                           time_derivs=[0, 1],  # i.e. joint position/velocity trajectory
-                          param_joints=param_joints,
-                          collision_link_names=collision_link_names)
-    robot.setup_workspace_field(arm_len=arm_len, arm_height=arm_height)
+                          param_joints=cfg['param_joints'],
+                          collision_link_names=cfg['collision_link_names'])
+    robot.setup_workspace_field(arm_len=cfg['arm_len'], arm_height=cfg['arm_height'])
 
     # load robot gripper model
     urdf_filename = os.path.join(robot_model_dir, f"{robot_name}_gripper.urdf")
@@ -206,8 +187,8 @@ if __name__ == '__main__':
 
     # Initialize planner
     print('Initialize planner')
-    planner = GTOPlanner(robot, link_ee, link_gripper)
-    ik_solver = IKSolver(robot, link_ee, link_gripper)   
+    planner = GTOPlanner(robot, cfg['link_ee'], cfg['link_gripper'])
+    ik_solver = IKSolver(robot, cfg['link_ee'], cfg['link_gripper'])   
     
     total_success = 0
     count = 0
@@ -267,8 +248,8 @@ if __name__ == '__main__':
                     RT_grasps_world[i] = RT
 
                     # check if the grasp is in collision
-                    RT_off = RT @ env.robot.get_standoff_pose(offset, axis_standoff)
-                    gripper_points, normals = gripper_model.compute_fk_surface_points(gripper_open_offsets, tf_base=RT_off)
+                    RT_off = RT @ env.robot.get_standoff_pose(offset, cfg['axis_standoff'])
+                    gripper_points, normals = gripper_model.compute_fk_surface_points(cfg['gripper_open_offsets'], tf_base=RT_off)
                     sdf = depth_pc.get_sdf(gripper_points)
 
                     ratio = np.sum(sdf < 0) / len(sdf)
@@ -328,7 +309,7 @@ if __name__ == '__main__':
                 qc = env.robot.q()
                 print('start planning')
                 start = time.time()
-                plan, cost = planner.plan_goalset(qc, RT_grasps_base, sdf_distances, q_solutions, use_standoff=True, axis_standoff=axis_standoff)
+                plan, cost = planner.plan_goalset(qc, RT_grasps_base, sdf_distances, q_solutions, use_standoff=True, axis_standoff=cfg['axis_standoff'])
                 # plan, cost = planner.plan(qc, RT_grasps_base[0], sdf_distances, q_solutions[:, 0], use_standoff=True, axis_standoff=axis_standoff)
                 planning_time = time.time() - start
                 print('plannnig time', planning_time, 'cost', cost)
@@ -339,7 +320,7 @@ if __name__ == '__main__':
                 env.robot.execute_plan(plan)
                 env.robot.close_gripper()
                 time.sleep(1.0)
-                env.retract(retract_distance)
+                env.retract(cfg['retract_distance'])
                 reward = env.compute_reward(object_name)
                 print(f'scene: {scene_id}, order: {ordering}, object: {object_name}, reward: {reward}')
                 # retract

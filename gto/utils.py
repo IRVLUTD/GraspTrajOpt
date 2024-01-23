@@ -1,7 +1,24 @@
+import os
 import json
 import numpy as np
 from transforms3d.quaternions import quat2mat
 from scipy import interpolate
+import yaml
+
+
+def get_root_dir():
+    this_dir = os.path.dirname(__file__)
+    return os.path.join(this_dir, '..')
+
+
+def load_yaml(file_path):
+    if isinstance(file_path, str):
+        with open(file_path) as file_p:
+            yaml_params = yaml.load(file_p, Loader=yaml.Loader)
+    else:
+        yaml_params = file_path
+    return yaml_params
+
 
 def default_pose(robot_model):
     # set robot pose

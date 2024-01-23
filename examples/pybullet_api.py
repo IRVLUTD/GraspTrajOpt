@@ -248,7 +248,7 @@ class FixedBaseRobot:
 
 class Panda(FixedBaseRobot):
     def __init__(self, base_position=[0.0] * 3):
-        f = os.path.join(cwd, "robots", "panda", "panda.urdf")
+        f = os.path.join(cwd, "../data/robots", "panda", "panda.urdf")
         self.urdf_filename = f
         super().__init__(f, base_position=base_position)
         self.ee_index = 7
@@ -291,7 +291,7 @@ class Panda(FixedBaseRobot):
 
 class Fetch(FixedBaseRobot):
     def __init__(self, base_position=[0.0] * 3):
-        f = os.path.join(cwd, "robots", "fetch", "fetch.urdf")
+        f = os.path.join(cwd, "../data/robots", "fetch", "fetch.urdf")
         self.urdf_filename = f
         super().__init__(f, base_position=base_position)
         self.ee_index = 16

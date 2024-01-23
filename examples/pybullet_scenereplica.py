@@ -114,8 +114,8 @@ class SceneReplicaEnv():
         self.cache_object_poses = []
         self.cache_objects()
 
-        plane_file = os.path.join(self.root_dir, 'objects/floor/model_normalized.urdf') # _white
-        table_file = os.path.join(self.root_dir, 'objects/cafe_table/cafe_table.urdf')
+        plane_file = os.path.join(self.root_dir, '../data/objects/floor/model_normalized.urdf') # _white
+        table_file = os.path.join(self.root_dir, '../data/objects/cafe_table/cafe_table.urdf')
 
         self.obj_path = [plane_file, table_file]
         self.plane_id = p.loadURDF(plane_file, [0, 0, 0])

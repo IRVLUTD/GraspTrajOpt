@@ -4,7 +4,6 @@ import pathlib
 import numpy as np
 import argparse
 import _init_paths
-import scipy
 
 # OpTaS
 import optas
@@ -13,6 +12,7 @@ from optas.visualize import Visualizer
 from optas.spatialmath import standoff
 from gto.gto_models import GTORobotModel
 from gto.ik_solver import IKSolver
+from gto.utils import load_yaml, get_root_dir
 from transforms3d.quaternions import mat2quat
 from optas.spatialmath import standoff
 from gto.utils import interpolate_waypoints
@@ -236,67 +236,51 @@ if __name__ == "__main__":
     args = make_args()
     robot_name = args.robot
     
-    cwd = pathlib.Path(__file__).parent.resolve()  # path to current working directory
+    # load config file
+    root_dir = get_root_dir()
+    config_file = os.path.join(root_dir, 'data', 'configs', f'{robot_name}.yaml')
+    if not os.path.exists(config_file):
+        print(f'robot {robot_name} not supported', config_file)
+        sys.exit(1) 
+    cfg = load_yaml(config_file)['robot_cfg']
+    print(cfg)
 
     if robot_name == 'fetch':
-        param_joints = ['r_wheel_joint', 'l_wheel_joint', 'torso_lift_joint', 'head_pan_joint', 'head_tilt_joint', 
-                        'r_gripper_finger_joint', 'l_gripper_finger_joint', 'bellows_joint']
-        collision_link_names = ["shoulder_pan_link", "shoulder_lift_link", "upperarm_roll_link",
-                    "elbow_flex_link", "forearm_roll_link", "wrist_flex_link", "wrist_roll_link", "gripper_link",
-                    "l_gripper_finger_link", "r_gripper_finger_link"]
-        link_ee = "wrist_roll_link"  # end-effector link name
-        link_gripper = 'gripper_link'
-        axis_standoff = 'x' 
-        arm_len = 1.1
-        arm_height = 1.1
-        default_conf = [0.0, 0.0, 0.38, 0.009195, 0.908270, 1.32, 0.7, 0.0, -2.0, 0.0, -0.57, 0.0, 0.0, 0.0 , 0.0]
-
         RT = np.array([[-0.05241979, -0.45344928, -0.88973933,  0.41363978],
             [-0.27383122, -0.8502871,   0.44947574,  0.12551154],
             [-0.96034825,  0.26719978, -0.07959669,  0.97476065],
             [ 0.,          0.,          0.,          1.        ]])
-
     elif robot_name == 'panda':
-        param_joints = ['panda_finger_joint1', 'panda_finger_joint2']
-        collision_link_names = None  # all links
-        link_ee = "panda_hand"     # end-effector link name
-        link_gripper = 'panda_hand'
-        axis_standoff = 'z'
-        arm_len = 1.1
-        arm_height = 0
-        default_conf = [0.0, -1.285, 0.0, -2.356, 0.0, 1.571, 0.785, 0.0, 0.0]
-
         RT = np.array([[-0.61162336,  0.79089652,  0.01998741,  0.46388378],
             [ 0.7883297,   0.6071185,   0.09971584, -0.15167381],
             [ 0.06673018,  0.07674521, -0.99481508,  0.22877409],
-            [ 0.,          0.,          0.,          1.        ]]) 
-        
+            [ 0.,          0.,          0.,          1.        ]])    
     else:
         print(f'robot {robot_name} not supported')
         sys.exit(1)    
 
     # Setup robot
-    model_dir = os.path.join(cwd, "../examples/robots", robot_name)
-    urdf_filename = os.path.join(model_dir, f"{robot_name}.urdf") 
+    model_dir = os.path.join(root_dir, 'data', 'robots', cfg['robot_name'])
+    urdf_filename = os.path.join(root_dir, cfg['urdf_robot_path'])
 
     robot = GTORobotModel(model_dir, urdf_filename=urdf_filename, 
                         time_derivs=[0, 1],  # i.e. joint position/velocity trajectory
-                        param_joints=param_joints,
-                        collision_link_names=collision_link_names)
-    robot.setup_workspace_field(arm_len=arm_len, arm_height=arm_height)
+                        param_joints=cfg['param_joints'],
+                        collision_link_names=cfg['collision_link_names'])
+    robot.setup_workspace_field(arm_len=cfg['arm_len'], arm_height=cfg['arm_height'])
     print('optimized joint names:', robot.optimized_joint_names)
 
     # Initialize planner
-    planner = GTOPlanner(robot, link_ee, link_gripper)
+    planner = GTOPlanner(robot, cfg['link_ee'], cfg['link_gripper'])
     sdf_distances = np.zeros(robot.field_size)
-    qc = np.array(default_conf)
+    qc = np.array(cfg['default_pose'])
 
     # solve IK first
-    ik_solver = IKSolver(robot, link_ee, link_gripper)
+    ik_solver = IKSolver(robot, cfg['link_ee'], cfg['link_gripper'])
     q_solution, err_pos, err_rot = ik_solver.solve_ik(qc.reshape(-1, 1), RT)
 
     # Plan trajectory 
-    plan, cost = planner.plan(qc, RT, sdf_distances, q_solution, use_standoff=True, axis_standoff=axis_standoff)
+    plan, cost = planner.plan(qc, RT, sdf_distances, q_solution, use_standoff=True, axis_standoff=cfg['axis_standoff'])
     print(plan.shape)
 
     lo = robot.lower_actuated_joint_limits.toarray()
