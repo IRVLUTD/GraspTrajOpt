@@ -273,7 +273,8 @@ if __name__ == '__main__':
                 print('Among %d grasps, %d in collision, %d collision-free' % (n, np.sum(in_collision), RT_grasps_world.shape[0]))
                 if RT_grasps_world.shape[0] == 0:
                     set_objects.remove(object_name)
-                    results[object_name] = {'reward': 0, 'plan': None}
+                    results[object_name] = {'reward': 0, 'plan': None, 'checking_time': checking_time,
+                                         'ik_time': None, 'planning_time': None}
                     continue           
 
                 # test IK for remaining grasps
@@ -302,7 +303,8 @@ if __name__ == '__main__':
                 print('IK solutions with shape', q_solutions.shape)
                 if RT_grasps_world.shape[0] == 0:
                     set_objects.remove(object_name)
-                    results[object_name] = {'reward': 0, 'plan': None}
+                    results[object_name] = {'reward': 0, 'plan': None, 'checking_time': checking_time,
+                                         'ik_time': ik_time, 'planning_time': None}
                     continue
 
                 # plan to a grasp set
