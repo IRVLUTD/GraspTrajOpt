@@ -120,7 +120,7 @@ class GTOPlanner:
             points_base_all = points_base_all.T
             offsets = self.robot.points_to_offsets(points_base_all)
             # builder.add_eq_inequality_constraint('obstacle', sdf_distances[offsets])
-            builder.add_cost_term("cost_obstacle", optas.sumsqr(sdf_distances[offsets]))
+            builder.add_cost_term("cost_obstacle", 5 * optas.sum1(sdf_distances[offsets]))
 
         # Cost: minimize joint velocity
         dQ = builder.get_robot_states_and_parameters(self.robot_name, time_deriv=1)
@@ -183,9 +183,10 @@ class GTOPlanner:
         if q_solutions is None:
             Q0 = optas.diag(qc) @ optas.DM.ones(self.robot.ndof, self.T)
         else:
-            # sample a goal
-            index = np.random.randint(n)
-            q_solution = q_solutions[:, index]
+            # use IK mean as the goal
+            q_solution = np.mean(q_solutions, axis=1)
+            q_solution = np.clip(q_solution, self.robot.lower_actuated_joint_limits.toarray().flatten(), self.robot.upper_actuated_joint_limits.toarray().flatten())
+            
             # interpolate waypoints
             data = interpolate_waypoints(np.stack([qc, q_solution]), self.T, self.robot.ndof)
             index = np.array(self.robot.parameter_joint_indexes).astype(np.int32)

@@ -95,7 +95,7 @@ def debug_plan(robot, gripper_model, base_position, plan, depth_pc, sdf_distance
         vis.points(points_world[~index], rgb=[0, 1, 1], size=5)
         vis.points(points_world[index], rgb=[1, 0, 0], size=5)
         index = sdf_distances > 0
-        vis.points(workspace_points[~index], rgb=[1, 1, 0], size=3)
+        vis.points(workspace_points[index], rgb=[1, 1, 0], size=3)
         # vis.points(workspace_points[index], rgb=[0, 1, 0], size=10)        
         vis.robot(
             robot,
