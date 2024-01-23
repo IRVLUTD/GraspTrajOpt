@@ -40,6 +40,8 @@ class GTORobotModel(RobotModel):
         self.collision_link_names = collision_link_names
         self.surface_pc_map = self.compute_link_surface_points()
         self.visual_tf = self.setup_fk_functions()
+        self.field_margin = 0.4
+        self.grid_resolution = 0.05
 
 
     def compute_link_surface_points(self):
@@ -109,13 +111,30 @@ class GTORobotModel(RobotModel):
         self.ylim = [-arm_len, arm_len]
         self.zlim = [0, arm_height + arm_len]
 
-        self.field_margin = 0.4
-        self.grid_resolution = 0.05
         self.origin = np.array([self.xlim[0] - self.field_margin, self.ylim[0] - self.field_margin, self.zlim[0] - self.field_margin]).reshape((1, 3))
         workspace_points = np.array(np.meshgrid(
                                 np.arange(self.xlim[0] - self.field_margin, self.xlim[1] + self.field_margin, self.grid_resolution),
                                 np.arange(self.ylim[0] - self.field_margin, self.ylim[1] + self.field_margin, self.grid_resolution),
                                 np.arange(self.zlim[0] - self.field_margin, self.zlim[1] + self.field_margin, self.grid_resolution),
+                                indexing='ij'))
+        self.field_shape = workspace_points.shape[1:]
+        self.workspace_points = workspace_points.reshape((3, -1)).T
+        self.field_size = self.workspace_points.shape[0]
+        print('origin', self.origin)
+        print('workspace field shape', self.field_shape)
+        print('workspace field', self.field_size)
+        print('workspace points', self.workspace_points.shape)
+
+
+    def setup_points_field(self, points):
+
+        self.workspace_bounds = np.stack((points.min(0), points.max(0)), axis=1)
+        margin = self.field_margin
+        self.origin = np.array([self.workspace_bounds[0][0] - margin, self.workspace_bounds[1][0] - margin, self.workspace_bounds[2][0] - margin]).reshape((1, 3))
+        workspace_points = np.array(np.meshgrid(
+                                np.arange(self.workspace_bounds[0][0] - margin, self.workspace_bounds[0][1] + margin, self.grid_resolution),
+                                np.arange(self.workspace_bounds[1][0] - margin, self.workspace_bounds[1][1] + margin, self.grid_resolution),
+                                np.arange(self.workspace_bounds[2][0] - margin, self.workspace_bounds[2][1] + margin, self.grid_resolution),
                                 indexing='ij'))
         self.field_shape = workspace_points.shape[1:]
         self.workspace_points = workspace_points.reshape((3, -1)).T

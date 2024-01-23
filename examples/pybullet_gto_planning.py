@@ -241,8 +241,9 @@ if __name__ == '__main__':
                 target_mask = mask == idx
                 depth[target_mask] = 2.0
                 depth_pc = DepthPointCloud(depth, intrinsic_matrix, cam_pose, target_mask)
+
+                # compute sdf cost
                 world_points = robot.workspace_points + env.base_position.reshape((1, 3))
-                # use sdf distances
                 sdf_distances = depth_pc.get_sdf_cost(world_points)
 
                 # load grasps
