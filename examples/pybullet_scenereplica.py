@@ -156,7 +156,7 @@ class SceneReplicaEnv():
                 uid,
                 -1,
                 restitution=0.1,
-                mass=0.1,
+                mass=0.05,
                 spinningFriction=1.0,
                 rollingFriction=1.0,
                 lateralFriction=1.0,
