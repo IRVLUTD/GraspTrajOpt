@@ -163,6 +163,19 @@ class GTORobotModel(RobotModel):
         # https://eli.thegreenplace.net/2015/memory-layout-of-multi-dimensional-arrays
         offsets = idxes[:, 2] + self.field_shape[2] * (idxes[:, 1] + self.field_shape[1] * idxes[:, 0])
         return offsets
+    
+
+    def compute_plan_cost(self, plan, sdf_cost):
+        T = plan.shape[1]
+        cost = 0
+        for i in range(T):
+            q = plan[:, i]
+            points_base, _ = self.compute_fk_surface_points(q)
+            offset = self.points_to_offsets_numpy(points_base).astype(int)
+            cost += np.sum(sdf_cost[offset])
+        dist = np.linalg.norm(plan[:, 0] - plan[:, T-1])
+        return cost, dist
+
 
 
 def make_args():
