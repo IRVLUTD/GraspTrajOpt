@@ -7,10 +7,10 @@ Trajectory optimization for grasping
 
 ## Example Usage
   
-1. Setup the desired scene in Isaac Sim:
+1. Run GTO planning with SceneReplica in PyBullet:
    ```Shell
    cd examples/
-   python pybullet_scenes.py
+   python pybullet_gto_planning.py
    ```
 
 ![](./pics/example.png)
