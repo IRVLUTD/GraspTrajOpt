@@ -7,6 +7,7 @@ robot_cfg:
   link_gripper: "gripper_link"
   axis_standoff: 'x'
   retract_distance: 0.6
+  finger_index: [12, 13]
   gripper_open_offsets: [0.05, 0.05]
   arm_len: 1.1
   arm_height: 1.1

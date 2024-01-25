@@ -7,6 +7,7 @@ robot_cfg:
   link_gripper: "panda_hand"
   axis_standoff: 'z'
   retract_distance: 0.3
+  finger_index: [7, 8] 
   gripper_open_offsets: [0.04, 0.04]
   arm_len: 1.0
   arm_height: 0

@@ -13,3 +13,4 @@ pyopengl
 pyrender
 scikit-image
 scikit-learn
+open3d
