@@ -60,9 +60,6 @@ class GTOPlanner:
         builder.initial_configuration(
             self.robot_name, time_deriv=1
         )  # initial joint vel is zero
-        builder.fix_configuration(
-            self.robot_name, time_deriv=1, t=-1,
-        )  # end joint vel is zero
 
         # Constraint: dynamics
         builder.integrate_model_states(
@@ -168,8 +165,9 @@ class GTOPlanner:
 
         # Get robot configuration
         Q = solution[f"{self.robot_name}/q"]
+        dQ = solution[f"{self.robot_name}/dq"]
         cost = solution["f"]
-        return Q.toarray(), cost.toarray().flatten()
+        return Q.toarray(), dQ.toarray(), cost.toarray().flatten()
     
 
     def plan_goalset(self, qc, RTs, sdf_distances, q_solutions=None, use_standoff=True, axis_standoff='x'):
@@ -222,8 +220,9 @@ class GTOPlanner:
 
         # Get robot configuration
         Q = solution[f"{self.robot_name}/q"]
+        dQ = solution[f"{self.robot_name}/dq"]
         cost = solution["f"]
-        return Q.toarray(), cost.toarray().flatten()
+        return Q.toarray(), dQ.toarray(), cost.toarray().flatten()
 
 
 def make_args():
@@ -289,7 +288,7 @@ if __name__ == "__main__":
     q_solution, err_pos, err_rot = ik_solver.solve_ik(qc.reshape(-1, 1), RT)
 
     # Plan trajectory 
-    plan, cost = planner.plan(qc, RT, sdf_distances, q_solution, use_standoff=True, axis_standoff=cfg['axis_standoff'])
+    plan, dQ, cost = planner.plan(qc, RT, sdf_distances, q_solution, use_standoff=True, axis_standoff=cfg['axis_standoff'])
     print(plan.shape)
 
     lo = robot.lower_actuated_joint_limits.toarray()

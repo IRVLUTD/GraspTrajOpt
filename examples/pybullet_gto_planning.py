@@ -280,7 +280,7 @@ if __name__ == '__main__':
                 qc = env.robot.q()
                 print('start planning')
                 start = time.time()
-                plan, cost = planner.plan_goalset(qc, RT_grasps_base, sdf_distances, q_solutions, use_standoff=True, axis_standoff=cfg['axis_standoff'])
+                plan, dQ, cost = planner.plan_goalset(qc, RT_grasps_base, sdf_distances, q_solutions, use_standoff=True, axis_standoff=cfg['axis_standoff'])
                 # plan, cost = planner.plan(qc, RT_grasps_base[0], sdf_distances, q_solutions[:, 0], use_standoff=True, axis_standoff=axis_standoff)
                 planning_time = time.time() - start
                 print('plannnig time', planning_time, 'cost', cost)
