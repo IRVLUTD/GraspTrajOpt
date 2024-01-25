@@ -14,7 +14,7 @@ from optas.visualize import Visualizer
 from gto.gto_models import GTORobotModel
 from gto.gto_planner import GTOPlanner
 from gto.ik_solver import IKSolver
-from gto.utils import load_yaml, get_root_dir
+from gto.utils import load_yaml, get_root_dir, visualize_plan
 from transforms3d.quaternions import mat2quat
     
 
@@ -42,37 +42,6 @@ def load_grasps(data_dir, robot_name, model):
         offset_pose = np.array(rotZ(np.pi / 2))  # and
         RT_grasps = np.matmul(RT_grasps, offset_pose)  # flip x, y 
     return RT_grasps
-
-
-def visualize_plan(robot, gripper_model, base_position, plan, depth_pc, RT_grasps_world):
-    # visualize grasps
-    vis = Visualizer(camera_position=[3, 0, 3])
-    vis.grid_floor()
-    vis.points(
-        depth_pc.points,
-    )
-    q = [0, 0]
-    for i in range(RT_grasps_world.shape[0]):
-        RT = RT_grasps_world[i]
-        position = RT[:3, 3]
-        # scalar-last (x, y, z, w) format in optas
-        quat = mat2quat(RT[:3, :3])
-        orientation = [quat[1], quat[2], quat[3], quat[0]]
-        vis.robot(
-            gripper_model,
-            base_position=position,
-            base_orientation=orientation,
-            q=q,
-            alpha = 0.1,
-        )
-    # robot trajectory
-    # sample plan
-    n = plan.shape[1]
-    index = list(range(0, n, 10))
-    if index[-1] != n - 1:
-        index += [n - 1]
-    vis.robot_traj(robot, plan[:, index], base_position, alpha_spec={'style': 'A'})
-    vis.start()
 
 
 def debug_plan(robot, gripper_model, base_position, plan, depth_pc, sdf_distances, RT_grasps_world, show_grasp=True):

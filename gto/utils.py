@@ -1,9 +1,10 @@
 import os
 import json
 import numpy as np
-from transforms3d.quaternions import quat2mat
+from transforms3d.quaternions import quat2mat, mat2quat
 from scipy import interpolate
 import yaml
+from optas.visualize import Visualizer
 
 
 def get_root_dir():
@@ -67,3 +68,34 @@ def interpolate_waypoints(waypoints, n, m, mode="cubic"):  # linear
         # plt.plot(x, y, 'o', t[1:-1], data[:, i], '-') #  f(np.linspace(0, 1, 5 * n+2))
         # plt.show()
     return data
+
+
+def visualize_plan(robot, gripper_model, base_position, plan, depth_pc, RT_grasps_world):
+    # visualize grasps
+    vis = Visualizer(camera_position=[3, 0, 3])
+    vis.grid_floor()
+    vis.points(
+        depth_pc.points,
+    )
+    q = [0, 0]
+    for i in range(RT_grasps_world.shape[0]):
+        RT = RT_grasps_world[i]
+        position = RT[:3, 3]
+        # scalar-last (x, y, z, w) format in optas
+        quat = mat2quat(RT[:3, :3])
+        orientation = [quat[1], quat[2], quat[3], quat[0]]
+        vis.robot(
+            gripper_model,
+            base_position=position,
+            base_orientation=orientation,
+            q=q,
+            alpha = 0.1,
+        )
+    # robot trajectory
+    # sample plan
+    n = plan.shape[1]
+    index = list(range(0, n, 10))
+    if index[-1] != n - 1:
+        index += [n - 1]
+    vis.robot_traj(robot, plan[:, index], base_position, alpha_spec={'style': 'A'})
+    vis.start()

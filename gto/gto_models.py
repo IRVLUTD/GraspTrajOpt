@@ -42,6 +42,19 @@ class GTORobotModel(RobotModel):
         self.visual_tf = self.setup_fk_functions()
         self.field_margin = 0.4
         self.grid_resolution = 0.05
+        
+
+    def get_standoff_pose(self, offset, axis):
+        pose_standoff = np.eye(4, dtype=np.float32)
+        if axis == 'x':
+            pose_standoff[0, 3] = offset
+        elif axis == 'y':
+            pose_standoff[1, 3] = offset
+        elif axis == 'z':
+            pose_standoff[2, 3] = offset
+        else:
+            print('unknow standoff axis', axis)
+        return pose_standoff          
 
 
     def compute_link_surface_points(self):

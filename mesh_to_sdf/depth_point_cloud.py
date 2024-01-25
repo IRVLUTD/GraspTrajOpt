@@ -38,9 +38,9 @@ class DepthPointCloud:
         height = im_depth.shape[0]
         depth = im_depth.astype(np.float32, copy=True).flatten()
         if self.target_mask is not None:
-            mask = (depth != 0) & (depth < self.threshold) & (self.target_mask.flatten() == 0)
+            mask = (depth > 0) & (depth < self.threshold) & (self.target_mask.flatten() == 0)
         else:
-            mask = (depth != 0) & (depth < self.threshold)
+            mask = (depth > 0) & (depth < self.threshold)
 
         x, y = np.meshgrid(np.arange(width), np.arange(height))
         ones = np.ones((height, width), dtype=np.float32)
