@@ -165,6 +165,8 @@ class GTORobotModel(RobotModel):
         # offset = n_3 + N_3 * (n_2 + N_2 * n_1)
         # https://eli.thegreenplace.net/2015/memory-layout-of-multi-dimensional-arrays
         offsets = idxes[:, 2] + self.field_shape[2] * (idxes[:, 1] + self.field_shape[1] * idxes[:, 0])
+        offsets = cs.fmax(offsets, 0)
+        offsets = cs.fmin(offsets, self.field_size - 1)
         return offsets
     
     
@@ -175,6 +177,7 @@ class GTORobotModel(RobotModel):
         # offset = n_3 + N_3 * (n_2 + N_2 * n_1)
         # https://eli.thegreenplace.net/2015/memory-layout-of-multi-dimensional-arrays
         offsets = idxes[:, 2] + self.field_shape[2] * (idxes[:, 1] + self.field_shape[1] * idxes[:, 0])
+        offsets = np.clip(offsets, 0, self.field_size - 1)
         return offsets
     
 

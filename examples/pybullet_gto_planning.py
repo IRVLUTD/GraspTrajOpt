@@ -44,13 +44,13 @@ def load_grasps(data_dir, robot_name, model):
     return RT_grasps
 
 
-def debug_plan(robot, gripper_model, base_position, plan, depth_pc, sdf_distances, RT_grasps_world, show_grasp=True):
+def debug_plan(robot, gripper_model, base_position, plan, depth_pc, sdf_cost, RT_grasps_world, show_grasp=True):
     T = plan.shape[1]
     for i in range(47, T):
         q = plan[:, i]
         points_base, _ = robot.compute_fk_surface_points(q)
         offset = robot.points_to_offsets_numpy(points_base).astype(int)
-        cost = np.sum(sdf_distances[offset])
+        cost = np.sum(sdf_cost[offset])
         print(f'time step {i}, sdf cost {cost}')
 
         workspace_points = robot.workspace_points + base_position.reshape((1, 3))
@@ -58,10 +58,10 @@ def debug_plan(robot, gripper_model, base_position, plan, depth_pc, sdf_distance
         vis = Visualizer(camera_position=[3, 0, 3])
         vis.grid_floor()
         vis.points(depth_pc.points, rgb=[1, 1, 1])
-        index = sdf_distances[offset] > 0
+        index = sdf_cost[offset] > 0
         vis.points(points_world[~index], rgb=[0, 1, 1], size=5)
         vis.points(points_world[index], rgb=[1, 0, 0], size=5)
-        index = sdf_distances > 0
+        index = sdf_cost > 0
         vis.points(workspace_points[index], rgb=[1, 1, 0], size=3)
         # vis.points(workspace_points[index], rgb=[0, 1, 0], size=10)        
         vis.robot(
@@ -145,7 +145,6 @@ if __name__ == '__main__':
                           time_derivs=[0, 1],  # i.e. joint position/velocity trajectory
                           param_joints=cfg['param_joints'],
                           collision_link_names=cfg['collision_link_names'])
-    robot.setup_workspace_field(arm_len=cfg['arm_len'], arm_height=cfg['arm_height'])
 
     # load robot gripper model
     urdf_filename = os.path.join(robot_model_dir, f"{robot_name}_gripper.urdf")
@@ -189,12 +188,21 @@ if __name__ == '__main__':
                 rgba, depth, mask, cam_pose, intrinsic_matrix = env.get_observation()
                 idx = env.object_uids[env.object_names.index(object_name)]
                 target_mask = mask == idx
-                depth[target_mask] = 2.0
-                depth_pc = DepthPointCloud(depth, intrinsic_matrix, cam_pose, target_mask)
+                depth_pc = DepthPointCloud(depth, intrinsic_matrix, cam_pose, target_mask=None, threshold=cfg['depth_threshold'])
+                robot.setup_points_field(depth_pc.points)
 
-                # compute sdf cost
+                # compute sdf cost obstacle
+                depth_obstacle = depth.copy()
+                depth_obstacle[target_mask] = cfg['depth_threshold']
+                depth_pc_obstacle = DepthPointCloud(depth_obstacle, intrinsic_matrix, cam_pose, target_mask, threshold=cfg['depth_threshold'])
                 world_points = robot.workspace_points + env.base_position.reshape((1, 3))
-                sdf_distances = depth_pc.get_sdf_cost(world_points)
+                sdf_cost_obstacle = depth_pc_obstacle.get_sdf_cost(world_points)
+
+                # compute sdf cost target
+                depth_target = depth.copy()
+                depth_target[~target_mask] = cfg['depth_threshold']
+                depth_pc_target = DepthPointCloud(depth_target, intrinsic_matrix, cam_pose, ~target_mask, threshold=cfg['depth_threshold'])
+                sdf_cost_target = depth_pc_target.get_sdf_cost(world_points)
 
                 # load grasps
                 RT_grasps = load_grasps(data_dir, robot_name, object_name)
@@ -219,7 +227,7 @@ if __name__ == '__main__':
                     # check if the grasp is in collision
                     RT_off = RT @ env.robot.get_standoff_pose(offset, cfg['axis_standoff'])
                     gripper_points, normals = gripper_model.compute_fk_surface_points(cfg['gripper_open_offsets'], tf_base=RT_off)
-                    sdf = depth_pc.get_sdf(gripper_points)
+                    sdf = depth_pc_obstacle.get_sdf(gripper_points)
 
                     ratio = np.sum(sdf < 0) / len(sdf)
                     print(f'grasp {i}, collision ratio {ratio}')
@@ -280,8 +288,8 @@ if __name__ == '__main__':
                 qc = env.robot.q()
                 print('start planning')
                 start = time.time()
-                plan, dQ, cost = planner.plan_goalset(qc, RT_grasps_base, sdf_distances, q_solutions, use_standoff=True, axis_standoff=cfg['axis_standoff'])
-                # plan, cost = planner.plan(qc, RT_grasps_base[0], sdf_distances, q_solutions[:, 0], use_standoff=True, axis_standoff=axis_standoff)
+                plan, dQ, cost = planner.plan_goalset(qc, RT_grasps_base, sdf_cost_obstacle, sdf_cost_target, q_solutions, use_standoff=True, axis_standoff=cfg['axis_standoff'])
+                # plan, cost = planner.plan(qc, RT_grasps_base[0], sdf_cost_obstacle, q_solutions[:, 0], use_standoff=True, axis_standoff=axis_standoff)
                 planning_time = time.time() - start
                 print('plannnig time', planning_time, 'cost', cost)
                 
@@ -303,7 +311,7 @@ if __name__ == '__main__':
                 results[object_name] = {'reward': reward, 'plan': plan.tolist(), 'checking_time': checking_time,
                                          'ik_time': ik_time, 'planning_time': planning_time}
                 
-                # debug_plan(robot, gripper_model, env.base_position, plan, depth_pc, sdf_distances, RT_grasps_world, show_grasp=False)
+                # debug_plan(robot, gripper_model, env.base_position, plan, depth_pc, sdf_cost_obstacle, RT_grasps_world, show_grasp=False)
 
             results_ordering[ordering] = results
         results_scene[f'{scene_id}'] = results_ordering                
