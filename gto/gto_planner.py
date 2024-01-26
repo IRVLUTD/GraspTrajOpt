@@ -104,10 +104,10 @@ class GTOPlanner:
                 cost[i] = optas.sumsqr(points_tf - points_tf_goal) + cost_reach
         builder.add_cost_term("cost_pos", optas.mmin(cost))
 
-        # obstacle avoidance
+        # obstacle avoidance up to standoff
         if self.collision_avoidance:
             points_base_all = None
-            for i in range(self.T):
+            for i in range(self.T + self.standoff_offset):
                 q = Q[:, i]
                 for name in self.robot.surface_pc_map.keys():
                     tf = self.robot.visual_tf[name](q)

@@ -179,6 +179,10 @@ if __name__ == '__main__':
             results = {}
             set_objects = set(object_order)
             for object_name in object_order:
+                # if object_name != '025_mug':
+                #     env.reset_objects(object_name)
+                #     set_objects.remove(object_name)
+                #     continue
                 count += 1
                 print(object_name)
                 # reset scene
@@ -190,13 +194,13 @@ if __name__ == '__main__':
                 target_mask = mask == idx
                 depth_pc = DepthPointCloud(depth, intrinsic_matrix, cam_pose, target_mask=None, threshold=cfg['depth_threshold'])
                 robot.setup_points_field(depth_pc.points)
+                world_points = robot.workspace_points + env.base_position.reshape((1, 3))
+                sdf_cost_obstacle = depth_pc.get_sdf_cost(world_points)
 
                 # compute sdf cost obstacle
                 depth_obstacle = depth.copy()
                 depth_obstacle[target_mask] = cfg['depth_threshold']
                 depth_pc_obstacle = DepthPointCloud(depth_obstacle, intrinsic_matrix, cam_pose, target_mask, threshold=cfg['depth_threshold'])
-                world_points = robot.workspace_points + env.base_position.reshape((1, 3))
-                sdf_cost_obstacle = depth_pc_obstacle.get_sdf_cost(world_points)
 
                 # compute sdf cost target
                 depth_target = depth.copy()
