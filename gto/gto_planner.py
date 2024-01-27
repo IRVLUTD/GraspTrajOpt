@@ -80,9 +80,10 @@ class GTOPlanner:
         tf_gripper = self.fk(Q)
 
         # Cost: reach goal pose
+        # tf0 = tf_gripper[0]    # first time step pose
         tf = tf_gripper[self.T - 1]    # last time step pose
         points_tf = tf[:3, :3] @ self.gripper_points.T + tf[:3, 3].reshape((3, 1))
-        # contact between gripper and target
+
         offsets_gripper = self.robot.points_to_offsets(points_tf.T)
         cost_reach = -5 * optas.sumsqr(sdf_cost_target[offsets_gripper])
 
@@ -94,6 +95,7 @@ class GTOPlanner:
             tf_g = tf_goal[:, i].reshape((4, 4)).T
             tf_gripper_goal = tf_g @ self.gripper_tf(Q[:, self.T - 1])
             points_tf_goal = tf_gripper_goal[:3, :3] @ self.gripper_points.T + tf_gripper_goal[:3, 3].reshape((3, 1))
+            # cost_prior = optas.sumsqr(tf0[:3, 3] - tf_gripper_goal[:3, 3])
             # standoff
             if use_standoff:
                 self.pose_standoff = standoff(self.standoff_distance, axis_standoff) 
@@ -104,7 +106,7 @@ class GTOPlanner:
                 cost[i] = optas.sumsqr(points_tf - points_tf_goal) + cost_reach
         builder.add_cost_term("cost_pos", optas.mmin(cost))
 
-        # obstacle avoidance up to standoff
+        # obstacle avoidance
         if self.collision_avoidance:
             points_base_all = None
             for i in range(self.T + self.standoff_offset):
@@ -173,7 +175,7 @@ class GTOPlanner:
         return Q.toarray(), dQ.toarray(), cost.toarray().flatten()
     
 
-    def plan_goalset(self, qc, RTs, sdf_cost_obstacle, sdf_cost_target, q_solutions=None, use_standoff=True, axis_standoff='x'):
+    def plan_goalset(self, qc, RTs, sdf_cost_all, sdf_cost_obstacle, sdf_cost_target, q_solutions=None, use_standoff=True, axis_standoff='x'):
         n = RTs.shape[0]
         self.setup_optimization(goal_size=n, use_standoff=use_standoff, axis_standoff=axis_standoff)
         tf_goal = np.zeros((16, n))
@@ -213,7 +215,7 @@ class GTOPlanner:
             {
                 "qc": optas.DM(qc),
                 "tf_goal": optas.DM(tf_goal),
-                "sdf_cost_obstacle": optas.DM(sdf_cost_obstacle),
+                "sdf_cost_obstacle": optas.DM(sdf_cost_all),
                 "sdf_cost_target": optas.DM(sdf_cost_target),
                 f"{self.robot_name}/q/p": self.robot.extract_parameter_dimensions(Q0),
             }
