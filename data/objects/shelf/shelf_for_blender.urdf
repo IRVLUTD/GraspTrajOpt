@@ -1,0 +1,113 @@
+<?xml version="1.0" ?>
+<robot name="plane">
+
+  <link name="shelf_bottom">
+    <contact>
+        <lateral_friction value="1"/>
+        <spinning_friction value="0.001"/>
+			  <rolling_friction value="0.001"/>
+    </contact>
+    
+    <inertial>
+      <origin rpy="0 0 0" xyz="0 0 0"/>
+      <mass value=".0"/>
+      <inertia ixx="0" ixy="0" ixz="0" iyy="0" iyz="0" izz="0"/>
+    </inertial>
+      
+    <visual>
+      <origin rpy="0 0 0" xyz="0 0 0"/>
+      <geometry>
+        <mesh filename="meshes/shelf_bottom.obj" />
+      </geometry>
+      <material name="shelf_brown"/>
+    </visual>
+    
+    <collision>
+      <origin rpy="0 0 0" xyz="0 0 0"/>
+      <geometry>
+        <mesh filename="meshes/shelf_bottom.obj" />
+      </geometry>
+    </collision>
+      
+    <visual>
+      <origin rpy="0 0 0" xyz="0 0.3925 0.3905"/>
+      <geometry>
+        <mesh filename="meshes/shelf_left.obj" />
+      </geometry>
+      <material name="shelf_brown"/>
+    </visual>
+    
+    <collision>
+      <origin rpy="0 0 0" xyz="0 0.3925 0.3905"/>
+      <geometry>
+        <mesh filename="meshes/shelf_left.obj" />
+      </geometry>
+    </collision>
+
+    <visual>
+      <origin rpy="0 0 0" xyz="0 -0.3925 0.3905"/>
+      <geometry>
+        <mesh filename="meshes/shelf_right.obj" />
+      </geometry>
+      <material name="shelf_brown"/>
+    </visual>
+    
+    <collision>
+      <origin rpy="0 0 0" xyz="0 -0.3925 0.3905"/>
+      <geometry>
+        <mesh filename="meshes/shelf_right.obj" />
+      </geometry>
+    </collision>
+      
+    <visual>
+      <origin rpy="0 0 0" xyz="0 0 0.781"/>
+      <geometry>
+        <mesh filename="meshes/shelf_upper.obj" />
+      </geometry>
+      <material name="shelf_brown"/>
+    </visual>
+    
+    <collision>
+      <origin rpy="0 0 0" xyz="0 0 0.781"/>
+      <geometry>
+        <mesh filename="meshes/shelf_upper.obj" />
+      </geometry>
+    </collision>
+      
+    <visual>
+      <origin rpy="0 0 0" xyz="0.009 0 0.3905"/>
+      <geometry>
+        <mesh filename="meshes/shelf_middle.obj" />
+      </geometry>
+      <material name="shelf_brown"/>
+    </visual>
+    
+    <collision>
+      <origin rpy="0 0 0" xyz="0.009 0 0.3905"/>
+      <geometry>
+        <mesh filename="meshes/shelf_middle.obj" />
+      </geometry>
+    </collision>
+
+    <visual>
+      <origin rpy="0 0 0" xyz="-0.187 0 0.3905"/>
+      <geometry>
+        <mesh filename="meshes/shelf_back.obj" />
+      </geometry>
+      <material name="shelf_brown"/>
+    </visual>
+    
+    <collision>
+      <origin rpy="0 0 0" xyz="-0.187 0 0.3905"/>
+      <geometry>
+        <mesh filename="meshes/shelf_back.obj" />
+      </geometry>
+    </collision>
+      
+  </link>
+
+  <material name="shelf_brown">
+    <color rgba=".7686 .6431 .5176 1."/>
+  </material>
+
+</robot>

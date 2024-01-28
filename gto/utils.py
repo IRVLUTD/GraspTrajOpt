@@ -72,7 +72,7 @@ def interpolate_waypoints(waypoints, n, m, mode="cubic"):  # linear
 
 def visualize_plan(robot, gripper_model, base_position, plan, depth_pc, RT_grasps_world):
     # visualize grasps
-    vis = Visualizer(camera_position=[3, 0, 3])
+    vis = Visualizer(camera_position=[-2, 3.0, 4.0])
     vis.grid_floor()
     vis.points(
         depth_pc.points,

@@ -22,12 +22,12 @@ class GTOPlanner:
     def __init__(self, robot, link_ee, link_gripper, collision_avoidance=True):
         
         # trajectory parameters
-        self.T = 50  # no. time steps in trajectory
+        self.T = 100  # no. time steps in trajectory
         self.Tmax = 10.0  # trajectory of 5 secs
         t = optas.linspace(0, self.Tmax, self.T)
         self.dt = float((t[1] - t[0]).toarray()[0, 0])  # time step
         self.standoff_offset = -10
-        self.standoff_distance = -0.1       
+        self.standoff_distance = -0.1     
 
         # Setup robot
         self.robot = robot
@@ -109,7 +109,7 @@ class GTOPlanner:
         # obstacle avoidance
         if self.collision_avoidance:
             points_base_all = None
-            for i in range(self.T + self.standoff_offset):
+            for i in range(self.T):
                 q = Q[:, i]
                 for name in self.robot.surface_pc_map.keys():
                     tf = self.robot.visual_tf[name](q)
@@ -121,7 +121,7 @@ class GTOPlanner:
                         points_base_all = optas.horzcat(points_base_all, point_base)
             points_base_all = points_base_all.T
             offsets = self.robot.points_to_offsets(points_base_all)
-            builder.add_cost_term("cost_obstacle", 5 * optas.sumsqr(sdf_cost_obstacle[offsets]))
+            builder.add_cost_term("cost_obstacle", 10 * optas.sum1(sdf_cost_obstacle[offsets]))
 
         # Cost: minimize joint velocity
         dQ = builder.get_robot_states_and_parameters(self.robot_name, time_deriv=1)
@@ -175,7 +175,7 @@ class GTOPlanner:
         return Q.toarray(), dQ.toarray(), cost.toarray().flatten()
     
 
-    def plan_goalset(self, qc, RTs, sdf_cost_all, sdf_cost_obstacle, sdf_cost_target, q_solutions=None, use_standoff=True, axis_standoff='x'):
+    def plan_goalset(self, qc, RTs, sdf_cost_all, sdf_cost_obstacle, sdf_cost_target, q_solutions=None, use_standoff=False, axis_standoff='x'):
         n = RTs.shape[0]
         self.setup_optimization(goal_size=n, use_standoff=use_standoff, axis_standoff=axis_standoff)
         tf_goal = np.zeros((16, n))

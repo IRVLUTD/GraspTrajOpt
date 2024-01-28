@@ -46,7 +46,7 @@ def load_grasps(data_dir, robot_name, model):
 
 def debug_plan(robot, gripper_model, base_position, plan, depth_pc, sdf_cost, RT_grasps_world, show_grasp=True):
     T = plan.shape[1]
-    for i in range(47, T):
+    for i in range(30, T):
         q = plan[:, i]
         points_base, _ = robot.compute_fk_surface_points(q)
         offset = robot.points_to_offsets_numpy(points_base).astype(int)
@@ -113,6 +113,13 @@ def make_args():
         default=-1,
         help="SceneReplica scene id",
     )
+    parser.add_argument(
+        "-t",
+        "--scene_type",
+        type=str,
+        default="tabletop",
+        help="tabletop or shelf",
+    )       
     parser.add_argument("-v", "--vis", help="renders", action="store_true")
     args = parser.parse_args()
     return args
@@ -124,6 +131,7 @@ if __name__ == '__main__':
     robot_name = args.robot
     data_dir = args.data_dir
     scene_id = args.scene_id
+    scene_type = args.scene_type
 
     # load config file
     root_dir = get_root_dir()
@@ -151,7 +159,7 @@ if __name__ == '__main__':
     gripper_model = GTORobotModel(robot_model_dir, urdf_filename=urdf_filename)
 
     # create the table environment
-    env = SceneReplicaEnv(data_dir, robot_name)
+    env = SceneReplicaEnv(data_dir, robot_name, scene_type)
 
     # Initialize planner
     print('Initialize planner')
@@ -298,6 +306,8 @@ if __name__ == '__main__':
                 planning_time = time.time() - start
                 print('plannnig time', planning_time, 'cost', cost)
                 
+                # debug_plan(robot, gripper_model, env.base_position, plan, depth_pc, sdf_cost_all, RT_grasps_world, show_grasp=False)
+
                 if args.vis:
                     visualize_plan(robot, gripper_model, env.base_position, plan, depth_pc, RT_grasps_world)
 
@@ -315,8 +325,6 @@ if __name__ == '__main__':
                 print(f'total reward: {total_success}/{count}')
                 results[object_name] = {'reward': reward, 'plan': plan.tolist(), 'checking_time': checking_time,
                                          'ik_time': ik_time, 'planning_time': planning_time}
-                
-                # debug_plan(robot, gripper_model, env.base_position, plan, depth_pc, sdf_cost_obstacle, RT_grasps_world, show_grasp=False)
 
             results_ordering[ordering] = results
         results_scene[f'{scene_id}'] = results_ordering                

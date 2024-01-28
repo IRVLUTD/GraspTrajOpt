@@ -2,20 +2,23 @@ import os, sys
 import time
 import numpy as np
 import pybullet as p
+import open3d as o3d
 import argparse
 import scipy
 import matplotlib.pyplot as plt
 from pybullet_api import Fetch, Panda
+from transforms3d.quaternions import mat2quat
 from utils import *
 
 
 class SceneReplicaEnv():
 
-    def __init__(self, data_dir, robot_name='fetch'):
+    def __init__(self, data_dir, robot_name='fetch', scene_type='tabletop'):
 
         self.data_dir = data_dir
         self.model_dir = os.path.join(data_dir, "objects")
         self.scenes_path = os.path.join(data_dir, "final_scenes", "scene_data")
+        self.scene_type = scene_type
 
         self._renders = True
         self._egl_render = False
@@ -31,12 +34,15 @@ class SceneReplicaEnv():
         self.connect()
         if robot_name == 'fetch':
             base_position = np.array([0.0, 0.0, 0.0])
+            arm_height = 1.1
         elif robot_name == 'panda':
             base_position = np.array([0.05, 0, 0.7])
+            arm_height = 0
         else:
             print(f'robot {robot_name} not supported')
             sys.exit(1)
         self.base_position = base_position
+        self.arm_height = arm_height
 
         # load scene ids
         filename = os.path.join(data_dir, 'final_scenes', 'scene_ids.txt')
@@ -72,7 +78,7 @@ class SceneReplicaEnv():
             self.cid = p.connect(p.SHARED_MEMORY)
             if (self.cid < 0):
                 self.cid = p.connect(p.GUI)
-            p.resetDebugVisualizerCamera(1.5, 90.0, -41.0, [0.45, 0, 0.45])
+            p.resetDebugVisualizerCamera(2.5, -45.0, -41.0, [0.45, 0, 0.45])
         else:
             self.cid = p.connect(p.DIRECT)
 
@@ -103,36 +109,55 @@ class SceneReplicaEnv():
         # set robot
         if robot_name == 'fetch':
             base_position = np.zeros((3, ))
-            self.robot = Fetch(base_position)
+            self.robot = Fetch(base_position, self.scene_type)
         elif robot_name == 'panda':
-            self.robot = Panda(base_position)        
+            self.robot = Panda(base_position, self.scene_type)        
         self.robot.retract()    
 
         # Set table and plane
+        plane_file = os.path.join(self.root_dir, '../data/objects/floor/model_normalized.urdf') # _white
+        self.plane_id = p.loadURDF(plane_file, [0, 0, 0])
+        self.light_position = np.array([-1.0, 0, 2.5])
+        if self.scene_type == 'tabletop':
+            table_file = os.path.join(self.root_dir, '../data/objects/cafe_table/cafe_table.urdf')
+            self.obj_path = [plane_file, table_file]
+            # z_offset = -0.03  # difference between Real World and table CAD model
+            z_offset = 0
+            self.table_or_shelf_pos = np.array([0.8, 0, z_offset])
+            self.table_id = p.loadURDF(table_file, self.table_or_shelf_pos)
+            self.table_height = 0.75
+            p.changeDynamics(
+                self.table_id,
+                -1,
+                restitution=0.1,
+                spinningFriction=1.0,
+                rollingFriction=1.0,
+                lateralFriction=1.0,
+            )
+        elif self.scene_type == 'shelf':
+            shelf_file = os.path.join(self.root_dir, '../data/objects/shelf/shelf.urdf')
+            self.obj_path = [plane_file, shelf_file]
+            # z_offset = -0.03  # difference between Real World and table CAD model
+            z_offset = base_position[2] + 0.35
+            self.table_or_shelf_pos = np.array([0.9, 0, z_offset])
+            self.shelf_orn = [0, 0, 1, 0]
+            self.shelf_id = p.loadURDF(shelf_file, self.table_or_shelf_pos, self.shelf_orn)
+            self.shelf_height = 0.8
+            self.shelf_interval = 0.2
+            p.changeDynamics(
+                self.shelf_id,
+                -1,
+                restitution=0.1,
+                spinningFriction=1.0,
+                rollingFriction=1.0,
+                lateralFriction=1.0,
+            )
+
+        # cache objects
         self.object_uids = []
         self.object_names = []
         self.cache_object_poses = []
-        self.cache_objects()
-
-        plane_file = os.path.join(self.root_dir, '../data/objects/floor/model_normalized.urdf') # _white
-        table_file = os.path.join(self.root_dir, '../data/objects/cafe_table/cafe_table.urdf')
-
-        self.obj_path = [plane_file, table_file]
-        self.plane_id = p.loadURDF(plane_file, [0, 0, 0])
-        # z_offset = -0.03  # difference between Real World and table CAD model
-        z_offset = 0
-        self.table_pos = np.array([0.8, 0, z_offset])
-        self.table_id = p.loadURDF(table_file, self.table_pos)
-        self.table_height = 0.75
-        self.light_position = np.array([-1.0, 0, 2.5])
-        p.changeDynamics(
-            self.table_id,
-            -1,
-            restitution=0.1,
-            spinningFriction=1.0,
-            rollingFriction=1.0,
-            lateralFriction=1.0,
-        )
+        self.cache_objects()     
 
 
     def cache_objects(self):
@@ -168,10 +193,69 @@ class SceneReplicaEnv():
         # add objects
         print(f"-----------Scene: {scene_id}---------------")
         meta_f = "meta-%06d.mat" % scene_id
-        meta = scipy.io.loadmat(os.path.join(self.data_dir, "final_scenes", "metadata", meta_f))
+        if self.scene_type == 'tabletop':
+            meta = scipy.io.loadmat(os.path.join(self.data_dir, "final_scenes", "metadata", meta_f))
+        elif self.scene_type == 'shelf':
+            filename_meta = os.path.join(self.data_dir, "shelf_scenes", "metadata", meta_f)
+            if os.path.exists(filename_meta):
+                meta = scipy.io.loadmat(filename_meta)
+            else:
+                # create scene
+                dirname = os.path.join(self.data_dir, "shelf_scenes", "metadata")
+                if not os.path.exists(dirname):
+                    os.makedirs(dirname)
+                # randomly sample 6 objects
+                num = 6
+                index = np.random.permutation(len(self.ycb_object_names))[:num]
+                meta = {}
+                meta_obj_names = [self.ycb_object_names[i] for i in index]
+                meta["object_names"] = meta_obj_names
+                # set ordering
+                for ordering in ["nearest_first", "random"]:
+                    if ordering == 'nearest_first':
+                        index = np.arange(num)
+                    else:
+                        index = np.random.permutation(num)
+                    s = ''
+                    for i in index:
+                        s += f'{meta_obj_names[i]},'
+                    meta[ordering] = []
+                    meta[ordering].append(s[:-1])
+
+                # place object
+                poses = np.zeros((num, 7))
+                for i, obj in enumerate(meta_obj_names):
+                    obj = obj.strip()
+                    filename = os.path.join(self.model_dir, obj, 'textured_simple.obj')
+                    mesh = o3d.io.read_triangle_mesh(filename)
+                    w, h, l = mesh.get_axis_aligned_bounding_box().get_extent()
+                    x, y, z = self.table_or_shelf_pos
+                    x -= 0.1
+                    y = y - self.shelf_interval + (i % 3) * self.shelf_interval
+                    z = z + int(i / 3) * self.shelf_height / 2 + l / 2 + 0.05
+                    position = [x, y, z]
+                    poses[i, :3] = position
+
+                    if obj == '009_gelatin_box':
+                        quat = [0.42352419407869757, -0.647429444803661, 0.2853495846186877, 0.5657189987875211]
+                    elif obj =='008_pudding_box':
+                        quat = [0.1056131239032366, 0.4224218214245438, -0.5618682166257071, -0.7033560833529615]
+                    else:
+                        # randomize z axis
+                        angle = np.random.uniform(-np.pi, np.pi)
+                        RT = rotZ(angle)
+                        quat = mat2quat(RT[:3, :3])
+                    # scalar-last (x, y, z, w) format in optas
+                    orientation = [quat[1], quat[2], quat[3], quat[0]]
+                    poses[i, 3:] = quat
+                meta['poses'] = poses
+                # save data
+                print('save data to', filename_meta)
+                scipy.io.savemat(filename_meta, meta)
+
+        # setup scene
         meta_obj_names = meta["object_names"]
         names = []
-        meta_poses = {}
         for i, obj in enumerate(meta_obj_names):
             obj = obj.strip()
             names.append(obj)
@@ -181,9 +265,7 @@ class SceneReplicaEnv():
             # scalar-last (x, y, z, w) format in optas
             orientation = [quat[1], quat[2], quat[3], quat[0]]
             self.set_object_pose(obj, position, orientation)
-            print(obj, position, orientation)
-            meta_poses[obj] = [position, orientation]
-        self.meta_poses = meta_poses            
+            print(obj, position, orientation)       
         # other objects
         for i, name in enumerate(self.ycb_object_names):
             if name not in names:
@@ -192,6 +274,14 @@ class SceneReplicaEnv():
         # start simulation
         self.start()
         time.sleep(1.0)
+
+        # cache object pose
+        meta_poses = {}
+        for i, obj in enumerate(meta_obj_names):
+            obj = obj.strip()
+            position, orientation = self.get_object_pose(obj)
+            meta_poses[obj] = [position, orientation]
+        self.meta_poses = meta_poses  
         return meta
     
     
@@ -247,7 +337,7 @@ class SceneReplicaEnv():
 
         lightDistance = 2.0
         light_position = np.array([-1.0, 0, 2.5])
-        lightDirection = self.table_pos - light_position
+        lightDirection = self.table_or_shelf_pos - light_position
         lightColor = np.array([1.0, 1.0, 1.0])
         return (
             cam_view_matrix,
@@ -338,8 +428,9 @@ class SceneReplicaEnv():
         The reward is 1 if one of the objects is above height
         """
         reward = 0
+        pos_prev, _ = self.meta_poses[object_name]
         pos, _ = self.get_object_pose(object_name)
-        if pos[2] > self.table_height + 0.2:
+        if pos[2] > pos_prev[2] + 0.2:
             reward = 1
         return reward            
 
@@ -408,6 +499,13 @@ def make_args():
         help="SceneReplica data directory",
     )
     parser.add_argument(
+        "-t",
+        "--scene_type",
+        type=str,
+        default="tabletop",
+        help="tabletop or shelf",
+    )    
+    parser.add_argument(
         "-s",
         "--scene_id",
         type=int,
@@ -424,8 +522,10 @@ if __name__ == '__main__':
     robot_name = args.robot
     data_dir = args.data_dir
     scene_id = args.scene_id
+    scene_type = args.scene_type
 
     # create the table environment
-    env = SceneReplicaEnv(data_dir, robot_name)
+    env = SceneReplicaEnv(data_dir, robot_name, scene_type)
     env.setup_scene(scene_id)
+    rgba, depth, mask, cam_pose, intrinsic_matrix = env.get_observation()
     input('end?')

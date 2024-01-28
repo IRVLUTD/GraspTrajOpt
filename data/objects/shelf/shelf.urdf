@@ -1,0 +1,218 @@
+<?xml version="0.0" ?>
+<robot name="plane">
+
+  <link name="shelf_bottom">
+    <contact>
+        <lateral_friction value="1."/>
+        <spinning_friction value="0.01"/>
+			  <rolling_friction value="0.01"/>
+    </contact>
+    
+    <inertial>
+      <origin rpy="0 0 0" xyz="0 0 0"/>
+      <mass value=".0"/>
+      <inertia ixx="0" ixy="0" ixz="0" iyy="0" iyz="0" izz="0"/>
+    </inertial>
+      
+    <visual>
+      <origin rpy="0 0 0" xyz="0 0 0"/>
+      <geometry>
+        <box size="0.392 0.803 0.022"/>
+      </geometry>
+      <material name="table_gray"/>
+    </visual>
+    
+    <collision>
+      <origin rpy="0 0 0" xyz="0 0 0"/>
+      <geometry>
+        <box size="0.392 0.803 0.022"/>
+      </geometry>
+    </collision>
+      
+  </link>
+
+  <link name="shelf_left">
+    <contact>
+        <lateral_friction value="1."/>
+        <spinning_friction value="0.01"/>
+			  <rolling_friction value="0.01"/>
+    </contact>
+    
+    <inertial>
+      <origin rpy="0 0 0" xyz="0 0 0"/>
+      <mass value=".0"/>
+      <inertia ixx="0" ixy="0" ixz="0" iyy="0" iyz="0" izz="0"/>
+    </inertial>
+      
+    <visual>
+      <origin rpy="0 0 0" xyz="0 0.3925 0.3905"/>
+      <geometry>
+        <box size="0.392 0.018 0.759"/>
+      </geometry>
+      <material name="table_gray"/>
+    </visual>
+    
+    <collision>
+      <origin rpy="0 0 0" xyz="0 0.3925 0.3905"/>
+      <geometry>
+        <box size="0.392 0.018 0.759"/>
+      </geometry>
+    </collision>
+      
+  </link>
+
+  <link name="shelf_right">
+    <contact>
+        <lateral_friction value="1."/>
+        <spinning_friction value="0.01"/>
+			  <rolling_friction value="0.01"/>
+    </contact>
+    
+    <inertial>
+      <origin rpy="0 0 0" xyz="0 0 0"/>
+      <mass value=".0"/>
+      <inertia ixx="0" ixy="0" ixz="0" iyy="0" iyz="0" izz="0"/>
+    </inertial>
+      
+    <visual>
+      <origin rpy="0 0 0" xyz="0 -0.3925 0.3905"/>
+      <geometry>
+        <box size="0.392 0.018 0.759"/>
+      </geometry>
+      <material name="table_gray"/>
+    </visual>
+    
+    <collision>
+      <origin rpy="0 0 0" xyz="0 -0.3925 0.3905"/>
+      <geometry>
+        <box size="0.392 0.018 0.759"/>
+      </geometry>
+    </collision>
+      
+  </link>
+
+  <link name="shelf_upper">
+    <contact>
+        <lateral_friction value="1."/>
+        <spinning_friction value="0.01"/>
+			  <rolling_friction value="0.01"/>
+    </contact>
+    
+    <inertial>
+      <origin rpy="0 0 0" xyz="0 0 0"/>
+      <mass value=".0"/>
+      <inertia ixx="0" ixy="0" ixz="0" iyy="0" iyz="0" izz="0"/>
+    </inertial>
+      
+    <visual>
+      <origin rpy="0 0 0" xyz="0 0 0.781"/>
+      <geometry>
+        <box size="0.392 0.803 0.022"/>
+      </geometry>
+      <material name="table_gray"/>
+    </visual>
+    
+    <collision>
+      <origin rpy="0 0 0" xyz="0 0 0.781"/>
+      <geometry>
+        <box size="0.392 0.803 0.022"/>
+      </geometry>
+    </collision>
+      
+  </link>
+
+  <link name="shelf_middle">
+    <contact>
+        <lateral_friction value="1."/>
+        <spinning_friction value="0.01"/>
+			  <rolling_friction value="0.01"/>
+    </contact>
+    
+    <inertial>
+      <origin rpy="0 0 0" xyz="0 0 0"/>
+      <mass value=".0"/>
+      <inertia ixx="0" ixy="0" ixz="0" iyy="0" iyz="0" izz="0"/>
+    </inertial>
+      
+    <visual>
+      <origin rpy="0 0 0" xyz="0.009 0 0.3905"/>
+      <geometry>
+        <box size="0.374 0.767 0.022"/>
+      </geometry>
+      <material name="table_gray"/>
+    </visual>
+    
+    <collision>
+      <origin rpy="0 0 0" xyz="0.009 0 0.3905"/>
+      <geometry>
+        <box size="0.374 0.767 0.022"/>
+      </geometry>
+    </collision>
+      
+  </link>
+
+  <link name="shelf_back">
+    <contact>
+        <lateral_friction value="1."/>
+        <spinning_friction value="0.01"/>
+			  <rolling_friction value="0.01"/>
+    </contact>
+    
+    <inertial>
+      <origin rpy="0 0 0" xyz="0 0 0"/>
+      <mass value=".0"/>
+      <inertia ixx="0" ixy="0" ixz="0" iyy="0" iyz="0" izz="0"/>
+    </inertial>
+      
+    <visual>
+      <origin rpy="0 0 0" xyz="-0.187 0 0.3905"/>
+      <geometry>
+        <box size="0.018 0.767 0.759"/>
+      </geometry>
+      <material name="table_gray"/>
+    </visual>
+    
+    <collision>
+      <origin rpy="0 0 0" xyz="-0.187 0 0.3905"/>
+      <geometry>
+        <box size="0.018 0.767 0.759"/>
+      </geometry>
+    </collision>
+      
+  </link>
+
+  <joint name="fixed_joint1" type="fixed">
+    <parent link="shelf_bottom"/>
+    <child link="shelf_left"/>
+    <origin rpy="0 0 0.0" xyz="0 0 0.0"/>
+  </joint>
+
+  <joint name="fixed_joint2" type="fixed">
+    <parent link="shelf_bottom"/>
+    <child link="shelf_right"/>
+    <origin rpy="0 0 0.0" xyz="0 0 0.0"/>
+  </joint>
+
+  <joint name="fixed_joint3" type="fixed">
+    <parent link="shelf_bottom"/>
+    <child link="shelf_upper"/>
+    <origin rpy="0 0 0.0" xyz="0 0 0.0"/>
+  </joint>
+
+  <joint name="fixed_joint4" type="fixed">
+    <parent link="shelf_bottom"/>
+    <child link="shelf_middle"/>
+    <origin rpy="0 0 0.0" xyz="0 0 0.0"/>
+  </joint>
+
+  <joint name="fixed_joint5" type="fixed">
+    <parent link="shelf_bottom"/>
+    <child link="shelf_back"/>
+    <origin rpy="0 0 0.0" xyz="0 0 0.0"/>
+  </joint>
+
+  <material name="table_gray">
+    <color rgba=".7686 .6431 .5176 1."/>
+  </material>
+
+</robot>

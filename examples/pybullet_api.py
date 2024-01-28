@@ -247,18 +247,22 @@ class FixedBaseRobot:
 
 
 class Panda(FixedBaseRobot):
-    def __init__(self, base_position=[0.0] * 3):
+    def __init__(self, base_position=[0.0] * 3, scene_type='tabletop'):
         f = os.path.join(cwd, "../data/robots", "panda", "panda.urdf")
         self.urdf_filename = f
         super().__init__(f, base_position=base_position)
         self.ee_index = 7
         self.camera_link_index = 10
         self.gripper_open_offsets = [0.04, 0.04]
-        self.finger_index = [7, 8]         
+        self.finger_index = [7, 8]
+        self.scene_type = scene_type
 
     def default_pose(self):
         # no panda joint 8
-        return np.array([0.0, -1.285, 0, -2.356, 0.0, 1.571, 0.785, 0.04, 0.04])
+        if self.scene_type == 'tabletop':
+            return np.array([0.0, -1.285, 0, -2.356, 0.0, 1.571, 0.785, 0.04, 0.04])
+        else:
+            return np.array([0.0, -1.285, 0, -2.356 + 1.4, 0.0, 1.571 - 0.6, 0.785, 0.0, 0.0])
     
     def get_camera_pose(self):
         pos, orn = p.getLinkState(self._id, self.camera_link_index)[:2]
@@ -290,7 +294,7 @@ class Panda(FixedBaseRobot):
     
 
 class Fetch(FixedBaseRobot):
-    def __init__(self, base_position=[0.0] * 3):
+    def __init__(self, base_position=[0.0] * 3, scene_type='tabletop'):
         f = os.path.join(cwd, "../data/robots", "fetch", "fetch.urdf")
         self.urdf_filename = f
         super().__init__(f, base_position=base_position)
@@ -298,6 +302,7 @@ class Fetch(FixedBaseRobot):
         self.camera_link_index = 7
         self.gripper_open_joints = [0.05, 0.05]
         self.finger_index = [12, 13]
+        self.scene_type = scene_type
 
     def default_pose(self):
         # set robot pose
