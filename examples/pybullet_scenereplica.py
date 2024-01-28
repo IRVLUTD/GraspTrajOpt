@@ -138,7 +138,7 @@ class SceneReplicaEnv():
             shelf_file = os.path.join(self.root_dir, '../data/objects/shelf/shelf.urdf')
             self.obj_path = [plane_file, shelf_file]
             # z_offset = -0.03  # difference between Real World and table CAD model
-            z_offset = base_position[2] + 0.35
+            z_offset = base_position[2] + 0.25
             self.table_or_shelf_pos = np.array([0.9, 0, z_offset])
             self.shelf_orn = [0, 0, 1, 0]
             self.shelf_id = p.loadURDF(shelf_file, self.table_or_shelf_pos, self.shelf_orn)
@@ -232,14 +232,28 @@ class SceneReplicaEnv():
                     x, y, z = self.table_or_shelf_pos
                     x -= 0.1
                     y = y - self.shelf_interval + (i % 3) * self.shelf_interval
-                    z = z + int(i / 3) * self.shelf_height / 2 + l / 2 + 0.05
+                    z = z + int(i / 3) * self.shelf_height / 2 + l / 2 + 0.01
+                    if obj == '035_power_drill' or '024_bowl':
+                        z += 0.05
                     position = [x, y, z]
                     poses[i, :3] = position
 
-                    if obj == '009_gelatin_box':
+                    if obj == '010_potted_meat_can' or obj == '021_bleach_cleanser':
+                        quat = [1, 0, 0, 0]
+                    elif obj == '009_gelatin_box':
                         quat = [0.42352419407869757, -0.647429444803661, 0.2853495846186877, 0.5657189987875211]
                     elif obj =='008_pudding_box':
-                        quat = [0.1056131239032366, 0.4224218214245438, -0.5618682166257071, -0.7033560833529615]
+                        quat = [0.3433036352820681, 0.3820507270105041, 0.5692984998692289, -0.6419338548787622]
+                    elif obj == '035_power_drill':
+                        quat = [0.15407648515185643, 0.17465462786331165, -0.6933749354238233, -0.6818998435365614]
+                    elif obj == "003_cracker_box" or obj == "004_sugar_box":
+                        angle = np.pi / 2
+                        RT = rotZ(angle)
+                        quat = mat2quat(RT[:3, :3])
+                    elif obj == '006_mustard_bottle':
+                        angle = np.pi / 4
+                        RT = rotZ(angle)
+                        quat = mat2quat(RT[:3, :3])
                     else:
                         # randomize z axis
                         angle = np.random.uniform(-np.pi, np.pi)
@@ -273,7 +287,7 @@ class SceneReplicaEnv():
                 self.set_object_pose(name, position, orientation)
         # start simulation
         self.start()
-        time.sleep(1.0)
+        time.sleep(2.0)
 
         # cache object pose
         meta_poses = {}
@@ -526,6 +540,7 @@ if __name__ == '__main__':
 
     # create the table environment
     env = SceneReplicaEnv(data_dir, robot_name, scene_type)
-    env.setup_scene(scene_id)
-    rgba, depth, mask, cam_pose, intrinsic_matrix = env.get_observation()
-    input('end?')
+    for scene_id in [36, 84, 68, 10, 77, 148, 48, 25, 104, 38, 27, 122, 141, 65, 39, 83, 130, 161, 33, 56]:
+        env.setup_scene(scene_id)
+        rgba, depth, mask, cam_pose, intrinsic_matrix = env.get_observation()
+        # input('end?')
