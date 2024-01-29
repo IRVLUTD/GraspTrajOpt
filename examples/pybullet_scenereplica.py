@@ -458,7 +458,7 @@ class SceneReplicaEnv():
 
         self.step(qc)  # grasp
         pos, orn = p.getLinkState(self.robot._id, self.robot.ee_index)[:2]
-        num = 5
+        num = 10
         offset = retract_distance / num
         for i in range(10):
             pos = (pos[0], pos[1], pos[2] + offset)

@@ -200,7 +200,7 @@ if __name__ == '__main__':
             results = {}
             set_objects = set(object_order)
             for object_name in object_order:
-                # if object_name != '011_banana':
+                # if object_name != '035_power_drill':
                 #     env.reset_objects(object_name)
                 #     set_objects.remove(object_name)
                 #     continue
@@ -294,7 +294,10 @@ if __name__ == '__main__':
                     # change world to robot base
                     RT[:3, 3] -= env.base_position
                     RT_grasps_base[i] = RT.copy()
-                    RT_off = RT @ env.robot.get_standoff_pose(standoff_distance, cfg['axis_standoff'])
+                    if scene_type == 'shelf':
+                        RT_off = RT @ env.robot.get_standoff_pose(standoff_distance, cfg['axis_standoff'])
+                    else:
+                        RT_off = RT
                     q_solution, err_pos, err_rot, cost_collision = ik_solver.solve_ik(q0, RT_off, sdf_cost_obstacle, env.base_position)
                     q_solutions[:, i] = q_solution
                     if err_pos < 0.01 and err_rot < 5 and cost_collision < 0.001:
@@ -333,11 +336,13 @@ if __name__ == '__main__':
                 time.sleep(1.0)
 
                 # retrieve object
-                env.retract(retract_distance=0.01)
-                plan_standoff = plan[:, np.arange(standoff_offset - 10, -1)]
-                plan_reverse = plan_standoff[:, ::-1]
-                plan_reverse[cfg['finger_index'], :] = 0
-                env.robot.execute_plan(plan_reverse)
+                if scene_type == 'tabletop':
+                    env.retract(cfg['retract_distance'])
+                else:
+                    plan_standoff = plan[:, np.arange(standoff_offset - 10, -1)]
+                    plan_reverse = plan_standoff[:, ::-1]
+                    plan_reverse[cfg['finger_index'], :] = 0
+                    env.robot.execute_plan(plan_reverse)
                 reward = env.compute_reward(object_name)
                 print(f'scene: {scene_id}, order: {ordering}, object: {object_name}, reward: {reward}')
 

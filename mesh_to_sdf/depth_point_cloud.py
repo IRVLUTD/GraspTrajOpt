@@ -15,7 +15,6 @@ class DepthPointCloud:
         self.width = depth.shape[1]
         self.height = depth.shape[0]
         self.threshold = threshold
-        self.grid_resolution = 0.02
 
         # backproject to camera
         pc = self.backproject_camera(depth, intrinsic_matrix)

@@ -42,7 +42,7 @@ class GTORobotModel(RobotModel):
         self.surface_pc_map = self.compute_link_surface_points()
         self.visual_tf = self.setup_fk_functions()
         self.field_margin = 0.4
-        self.grid_resolution = 0.02
+        self.grid_resolution = 0.05
         
 
     def get_standoff_pose(self, offset, axis):
@@ -189,7 +189,7 @@ class GTORobotModel(RobotModel):
         return offsets
     
 
-    def compute_plan_cost(self, plan, sdf_cost, base_position):
+    def compute_plan_cost(self, plan, sdf_cost_obstacle, base_position):
         T = plan.shape[1]
         cost = 0
         for i in range(T):
@@ -197,7 +197,8 @@ class GTORobotModel(RobotModel):
             points_base, _ = self.compute_fk_surface_points(q)
             points_world = points_base + np.array(base_position).reshape(1, 3)
             offsets = self.points_to_offsets_numpy(points_world)
-            cost += np.sum(sdf_cost[offsets])          
+            cost += np.sum(sdf_cost_obstacle[offsets])
+
         dist = np.linalg.norm(plan[:, 0] - plan[:, T-1])
         return cost, dist
 
