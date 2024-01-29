@@ -35,9 +35,10 @@ class IKSolver:
         # tf goal is for link_ee
         tf_goal = builder.add_parameter("tf_goal", 4, 4)
         # sdf field
-        sdf_cost_obstacle = builder.add_parameter("sdf_cost_obstacle", self.robot.field_size)
-        # base position
-        base_position = builder.add_parameter("base_position", 3)
+        if self.collision_avoidance:
+            sdf_cost_obstacle = builder.add_parameter("sdf_cost_obstacle", self.robot.field_size)
+            # base position
+            base_position = builder.add_parameter("base_position", 3)
 
         # get robot state variables
         q_T = builder.get_robot_states_and_parameters(self.robot_name)
@@ -78,10 +79,14 @@ class IKSolver:
 
     def solve_ik(self, q_0, RT, sdf_cost_obstacle, base_position):
         self.solver.reset_initial_seed({f"{self.robot_name}/q/x": self.robot.extract_optimized_dimensions(q_0)})
-        self.solver.reset_parameters({f"{self.robot_name}/q/p": self.robot.extract_parameter_dimensions(q_0),
+        if self.collision_avoidance:
+            self.solver.reset_parameters({f"{self.robot_name}/q/p": self.robot.extract_parameter_dimensions(q_0),
                                         "sdf_cost_obstacle": optas.DM(sdf_cost_obstacle),
                                         "base_position": optas.DM(base_position),
                                         "tf_goal": RT})
+        else:
+            self.solver.reset_parameters({f"{self.robot_name}/q/p": self.robot.extract_parameter_dimensions(q_0),
+                                        "tf_goal": RT})                   
         solution = self.solver.solve()
         q = solution[f"{self.robot_name}/q"]
 
@@ -92,7 +97,10 @@ class IKSolver:
         quat2 = mat2quat(tf[:3, :3])
         err_rot = np.arccos(np.clip(2 * np.square(np.dot(quat1, quat2)) - 1, -1, 1)) * 180 / np.pi
         plan = q.toarray().reshape(-1, 1)
-        cost, _ = self.robot.compute_plan_cost(plan, sdf_cost_obstacle, base_position)
+        if self.collision_avoidance:
+            cost, _ = self.robot.compute_plan_cost(plan, sdf_cost_obstacle, base_position)
+        else:
+            cost = 0
 
         print("***********************************") 
         print("Casadi IK solution:")

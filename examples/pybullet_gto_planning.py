@@ -134,8 +134,12 @@ if __name__ == '__main__':
     scene_type = args.scene_type
     if scene_type == 'tabletop':
         standoff_distance = -0.1
+        standoff_offset = -10
+        ik_collision_avoidance = False
     elif scene_type == 'shelf':
         standoff_distance = -0.2
+        standoff_offset = -10
+        ik_collision_avoidance = True
     else:
         print('unsupported scene type:', scene_type)
         sys.exit(1)
@@ -170,8 +174,10 @@ if __name__ == '__main__':
 
     # Initialize planner
     print('Initialize planner')
-    planner = GTOPlanner(robot, cfg['link_ee'], cfg['link_gripper'], standoff_distance=standoff_distance)
-    ik_solver = IKSolver(robot, cfg['link_ee'], cfg['link_gripper'])   
+    planner = GTOPlanner(robot, cfg['link_ee'], cfg['link_gripper'], 
+                         standoff_distance=standoff_distance,
+                         standoff_offset=standoff_offset)
+    ik_solver = IKSolver(robot, cfg['link_ee'], cfg['link_gripper'], collision_avoidance=ik_collision_avoidance)   
     
     total_success = 0
     count = 0
@@ -194,7 +200,7 @@ if __name__ == '__main__':
             results = {}
             set_objects = set(object_order)
             for object_name in object_order:
-                # if object_name != '025_mug':
+                # if object_name != '011_banana':
                 #     env.reset_objects(object_name)
                 #     set_objects.remove(object_name)
                 #     continue
@@ -288,7 +294,7 @@ if __name__ == '__main__':
                     # change world to robot base
                     RT[:3, 3] -= env.base_position
                     RT_grasps_base[i] = RT.copy()
-                    RT_off = RT @ env.robot.get_standoff_pose(-0.2, cfg['axis_standoff'])
+                    RT_off = RT @ env.robot.get_standoff_pose(standoff_distance, cfg['axis_standoff'])
                     q_solution, err_pos, err_rot, cost_collision = ik_solver.solve_ik(q0, RT_off, sdf_cost_obstacle, env.base_position)
                     q_solutions[:, i] = q_solution
                     if err_pos < 0.01 and err_rot < 5 and cost_collision < 0.001:
@@ -325,10 +331,17 @@ if __name__ == '__main__':
                 env.robot.execute_plan(plan)
                 env.robot.close_gripper()
                 time.sleep(1.0)
-                env.retract(cfg['retract_distance'])
+
+                # retrieve object
+                env.retract(retract_distance=0.01)
+                plan_standoff = plan[:, np.arange(standoff_offset - 10, -1)]
+                plan_reverse = plan_standoff[:, ::-1]
+                plan_reverse[cfg['finger_index'], :] = 0
+                env.robot.execute_plan(plan_reverse)
                 reward = env.compute_reward(object_name)
                 print(f'scene: {scene_id}, order: {ordering}, object: {object_name}, reward: {reward}')
-                # retract
+
+                # retract robot
                 env.reset_objects(object_name)
                 env.robot.retract()
                 set_objects.remove(object_name)

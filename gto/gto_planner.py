@@ -19,14 +19,14 @@ from gto.utils import interpolate_waypoints
 
 
 class GTOPlanner:
-    def __init__(self, robot, link_ee, link_gripper, collision_avoidance=True, standoff_distance=-0.1):
+    def __init__(self, robot, link_ee, link_gripper, collision_avoidance=True, standoff_distance=-0.1, standoff_offset=-10):
         
         # trajectory parameters
         self.T = 50  # no. time steps in trajectory
         self.Tmax = 10.0  # trajectory of 5 secs
         t = optas.linspace(0, self.Tmax, self.T)
         self.dt = float((t[1] - t[0]).toarray()[0, 0])  # time step
-        self.standoff_offset = -10
+        self.standoff_offset = standoff_offset
         self.standoff_distance = standoff_distance     
 
         # Setup robot

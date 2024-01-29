@@ -78,7 +78,7 @@ class SceneReplicaEnv():
             self.cid = p.connect(p.SHARED_MEMORY)
             if (self.cid < 0):
                 self.cid = p.connect(p.GUI)
-            p.resetDebugVisualizerCamera(2.5, -45.0, -41.0, [0.45, 0, 0.45])
+            p.resetDebugVisualizerCamera(2.0, -45.0, -41.0, [0.45, 0, 0.45])
         else:
             self.cid = p.connect(p.DIRECT)
 
@@ -444,12 +444,12 @@ class SceneReplicaEnv():
         reward = 0
         pos_prev, _ = self.meta_poses[object_name]
         pos, _ = self.get_object_pose(object_name)
-        if pos[2] > pos_prev[2] + 0.2:
+        if pos[2] > pos_prev[2] + 0.1:
             reward = 1
         return reward            
 
 
-    def retract(self, distance=0.3):
+    def retract(self, retract_distance=0.3):
         """Retract step."""
         qc = self.robot.q()
         # keep gripper closed
@@ -458,8 +458,8 @@ class SceneReplicaEnv():
 
         self.step(qc)  # grasp
         pos, orn = p.getLinkState(self.robot._id, self.robot.ee_index)[:2]
-        num = 10
-        offset = distance / num
+        num = 5
+        offset = retract_distance / num
         for i in range(10):
             pos = (pos[0], pos[1], pos[2] + offset)
             jointPoses = np.array(p.calculateInverseKinematics(self.robot._id, self.robot.ee_index, pos))
