@@ -163,22 +163,29 @@ class GTORobotModel(RobotModel):
         n = points.shape[0]
         origin = np.repeat(self.origin, n, axis=0)
         idxes = optas.floor((points - origin) / self.grid_resolution)
+        idxes[:, 0] = cs.fmax(idxes[:, 0], 0)
+        idxes[:, 0] = cs.fmin(idxes[:, 0], self.field_shape[0] - 1)
+        idxes[:, 1] = cs.fmax(idxes[:, 1], 0)
+        idxes[:, 1] = cs.fmin(idxes[:, 1], self.field_shape[1] - 1)
+        idxes[:, 2] = cs.fmax(idxes[:, 2], 0)
+        idxes[:, 2] = cs.fmin(idxes[:, 2], self.field_shape[2] - 1)
         # offset = n_3 + N_3 * (n_2 + N_2 * n_1)
         # https://eli.thegreenplace.net/2015/memory-layout-of-multi-dimensional-arrays
         offsets = idxes[:, 2] + self.field_shape[2] * (idxes[:, 1] + self.field_shape[1] * idxes[:, 0])
-        offsets = cs.fmax(offsets, 0)
-        offsets = cs.fmin(offsets, self.field_size - 1)
         return offsets
     
     
     def points_to_offsets_numpy(self, points):
         n = points.shape[0]
         origin = np.repeat(self.origin, n, axis=0)
-        idxes = np.floor((points - origin) / self.grid_resolution)
+        idxes = (points - origin) / self.grid_resolution
+        idxes[:, 0] = np.clip(idxes[:, 0], 0, self.field_shape[0] - 1).astype(np.int32)
+        idxes[:, 1] = np.clip(idxes[:, 1], 0, self.field_shape[1] - 1).astype(np.int32)
+        idxes[:, 2] = np.clip(idxes[:, 2], 0, self.field_shape[2] - 1).astype(np.int32)        
         # offset = n_3 + N_3 * (n_2 + N_2 * n_1)
         # https://eli.thegreenplace.net/2015/memory-layout-of-multi-dimensional-arrays
         offsets = idxes[:, 2] + self.field_shape[2] * (idxes[:, 1] + self.field_shape[1] * idxes[:, 0])
-        offsets = np.clip(offsets, 0, self.field_size - 1)
+        offsets = np.clip(offsets, 0, self.field_size - 1).astype(np.int32)
         return offsets
     
 
@@ -189,11 +196,10 @@ class GTORobotModel(RobotModel):
             q = plan[:, i]
             points_base, _ = self.compute_fk_surface_points(q)
             points_world = points_base + np.array(base_position).reshape(1, 3)
-            offset = self.points_to_offsets_numpy(points_world).astype(int)
-            cost += np.sum(sdf_cost[offset])
+            offsets = self.points_to_offsets_numpy(points_world)
+            cost += np.sum(sdf_cost[offsets])          
         dist = np.linalg.norm(plan[:, 0] - plan[:, T-1])
         return cost, dist
-
 
 
 def make_args():

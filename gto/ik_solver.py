@@ -61,7 +61,7 @@ class IKSolver:
                 tf = self.robot.visual_tf[name](q_T)
                 points = self.robot.surface_pc_map[name].points
                 points_world = tf[:3, :3] @ points.T + tf[:3, 3].reshape((3, 1)) + base_position.reshape((3, 1))
-                if points_world_all == None:
+                if points_world_all is None:
                     points_world_all = points_world
                 else:
                     points_world_all = optas.horzcat(points_world_all, points_world)

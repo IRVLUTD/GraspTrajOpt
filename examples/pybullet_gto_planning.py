@@ -326,7 +326,7 @@ if __name__ == '__main__':
                 
                 if args.vis:
                     visualize_plan(robot, gripper_model, env.base_position, plan, depth_pc, RT_grasps_world)
-                    # debug_plan(robot, gripper_model, env.base_position, plan, depth_pc, sdf_cost_all, RT_grasps_world, show_grasp=False)
+                    debug_plan(robot, gripper_model, env.base_position, plan, depth_pc, sdf_cost_obstacle, RT_grasps_world, show_grasp=False)
 
                 env.robot.execute_plan(plan)
                 env.robot.close_gripper()

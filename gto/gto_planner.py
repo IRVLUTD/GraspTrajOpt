@@ -118,7 +118,7 @@ class GTOPlanner:
                     tf = self.robot.visual_tf[name](q)
                     points = self.robot.surface_pc_map[name].points
                     points_world = tf[:3, :3] @ points.T + tf[:3, 3].reshape((3, 1)) + base_position.reshape((3, 1))
-                    if points_world_all == None:
+                    if points_world_all is None:
                         points_world_all = points_world
                     else:
                         points_world_all = optas.horzcat(points_world_all, points_world)
@@ -201,7 +201,7 @@ class GTOPlanner:
                 index = np.array(self.robot.parameter_joint_indexes).astype(np.int32)
                 data[:, index] = np.array(qc)[index]
                 plan = data.T
-                plan_all.append(plan)
+                plan_all.append(plan.copy())
                 cost, dist = self.robot.compute_plan_cost(plan, sdf_cost_obstacle, base_position)
                 print(f'plan {i}, cost {cost:.2f}, distance {dist:.2f}')
                 cost_all.append(cost)
