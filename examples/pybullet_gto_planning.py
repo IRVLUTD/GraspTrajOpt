@@ -224,12 +224,6 @@ if __name__ == '__main__':
                 depth_pc_obstacle = DepthPointCloud(depth_obstacle, intrinsic_matrix, cam_pose, target_mask, threshold=cfg['depth_threshold'])
                 sdf_cost_obstacle = depth_pc_obstacle.get_sdf_cost(world_points)
 
-                # compute sdf cost target
-                depth_target = depth.copy()
-                depth_target[~target_mask] = cfg['depth_threshold']
-                depth_pc_target = DepthPointCloud(depth_target, intrinsic_matrix, cam_pose, ~target_mask, threshold=cfg['depth_threshold'])
-                sdf_cost_target = depth_pc_target.get_sdf_cost(world_points)
-
                 # load grasps
                 RT_grasps = load_grasps(data_dir, robot_name, object_name)
 
@@ -322,7 +316,7 @@ if __name__ == '__main__':
                 qc = env.robot.q()
                 print('start planning')
                 start = time.time()
-                plan, dQ, cost = planner.plan_goalset(qc, RT_grasps_base, sdf_cost_all, sdf_cost_obstacle, sdf_cost_target, 
+                plan, dQ, cost = planner.plan_goalset(qc, RT_grasps_base, sdf_cost_all, sdf_cost_obstacle, 
                                                       env.base_position, q_solutions, use_standoff=True, axis_standoff=cfg['axis_standoff'])
                 planning_time = time.time() - start
                 print('plannnig time', planning_time, 'cost', cost)

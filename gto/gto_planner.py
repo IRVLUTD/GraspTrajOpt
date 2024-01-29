@@ -51,7 +51,6 @@ class GTOPlanner:
         tf_goal = builder.add_parameter("tf_goal", 16, goal_size)
         # sdf field
         sdf_cost_obstacle = builder.add_parameter("sdf_cost_obstacle", self.robot.field_size)
-        sdf_cost_target = builder.add_parameter("sdf_cost_target", self.robot.field_size)
         # base position
         base_position = builder.add_parameter("base_position", 3)        
 
@@ -85,11 +84,6 @@ class GTOPlanner:
         # tf0 = tf_gripper[0]    # first time step pose
         tf = tf_gripper[self.T - 1]    # last time step pose
         points_tf = tf[:3, :3] @ self.gripper_points.T + tf[:3, 3].reshape((3, 1))
-
-        points_gripper_world = points_tf + base_position.reshape((3, 1))
-        offsets_gripper = self.robot.points_to_offsets(points_gripper_world.T)
-        cost_reach = -5 * optas.sumsqr(sdf_cost_target[offsets_gripper])
-
         if use_standoff:
             tf_standoff = tf_gripper[self.T + self.standoff_offset]
             points_standoff = tf_standoff[:3, :3] @ self.gripper_points.T + tf_standoff[:3, 3].reshape((3, 1))
@@ -104,9 +98,9 @@ class GTOPlanner:
                 self.pose_standoff = standoff(self.standoff_distance, axis_standoff) 
                 tf_gripper_standoff = tf_g @ self.pose_standoff @ self.gripper_tf(Q[:, self.T + self.standoff_offset])
                 points_standoff_goal = tf_gripper_standoff[:3, :3] @ self.gripper_points.T + tf_gripper_standoff[:3, 3].reshape((3, 1))
-                cost[i] = optas.sumsqr(points_tf - points_tf_goal) + optas.sumsqr(points_standoff - points_standoff_goal) + cost_reach
+                cost[i] = optas.sumsqr(points_tf - points_tf_goal) + optas.sumsqr(points_standoff - points_standoff_goal)
             else:
-                cost[i] = optas.sumsqr(points_tf - points_tf_goal) + cost_reach
+                cost[i] = optas.sumsqr(points_tf - points_tf_goal) 
         builder.add_cost_term("cost_pos", optas.mmin(cost))
 
         # obstacle avoidance
@@ -138,7 +132,7 @@ class GTOPlanner:
         self.solver = optas.CasADiSolver(builder.build()).setup("ipopt", solver_options=solver_options)
 
 
-    def plan(self, qc, RT, sdf_cost_obstacle, sdf_cost_target, base_position, q_solution=None, use_standoff=True, axis_standoff='x'):
+    def plan(self, qc, RT, sdf_cost_obstacle, base_position, q_solution=None, use_standoff=True, axis_standoff='x'):
         self.setup_optimization(goal_size=1, use_standoff=use_standoff, axis_standoff=axis_standoff)
         tf_goal = np.zeros((16, 1))
         tf_goal[:, 0] = RT.flatten()
@@ -163,7 +157,6 @@ class GTOPlanner:
                 "qc": optas.DM(qc),
                 "tf_goal": optas.DM(tf_goal),
                 "sdf_cost_obstacle": optas.DM(sdf_cost_obstacle),
-                "sdf_cost_target": optas.DM(sdf_cost_target),
                 "base_position": optas.DM(base_position),
                 f"{self.robot_name}/q/p": self.robot.extract_parameter_dimensions(Q0),
             }
@@ -179,7 +172,7 @@ class GTOPlanner:
         return Q.toarray(), dQ.toarray(), cost.toarray().flatten()
     
 
-    def plan_goalset(self, qc, RTs, sdf_cost_all, sdf_cost_obstacle, sdf_cost_target, base_position, q_solutions=None, use_standoff=True, axis_standoff='x'):
+    def plan_goalset(self, qc, RTs, sdf_cost_all, sdf_cost_obstacle, base_position, q_solutions=None, use_standoff=True, axis_standoff='x'):
         n = RTs.shape[0]
         self.setup_optimization(goal_size=n, use_standoff=use_standoff, axis_standoff=axis_standoff)
         tf_goal = np.zeros((16, n))
@@ -224,7 +217,6 @@ class GTOPlanner:
                 "qc": optas.DM(qc),
                 "tf_goal": optas.DM(tf_goal),
                 "sdf_cost_obstacle": optas.DM(sdf_cost_all),
-                "sdf_cost_target": optas.DM(sdf_cost_target),
                 "base_position": optas.DM(base_position),
                 f"{self.robot_name}/q/p": self.robot.extract_parameter_dimensions(Q0),
             }
