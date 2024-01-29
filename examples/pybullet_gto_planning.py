@@ -132,6 +132,13 @@ if __name__ == '__main__':
     data_dir = args.data_dir
     scene_id = args.scene_id
     scene_type = args.scene_type
+    if scene_type == 'tabletop':
+        standoff_distance = -0.1
+    elif scene_type == 'shelf':
+        standoff_distance = -0.2
+    else:
+        print('unsupported scene type:', scene_type)
+        sys.exit(1)
 
     # load config file
     root_dir = get_root_dir()
@@ -163,7 +170,7 @@ if __name__ == '__main__':
 
     # Initialize planner
     print('Initialize planner')
-    planner = GTOPlanner(robot, cfg['link_ee'], cfg['link_gripper'])
+    planner = GTOPlanner(robot, cfg['link_ee'], cfg['link_gripper'], standoff_distance=standoff_distance)
     ik_solver = IKSolver(robot, cfg['link_ee'], cfg['link_gripper'])   
     
     total_success = 0
