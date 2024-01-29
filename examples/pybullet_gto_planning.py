@@ -136,10 +136,12 @@ if __name__ == '__main__':
         standoff_distance = -0.1
         standoff_offset = -10
         ik_collision_avoidance = False
+        interpolate = True
     elif scene_type == 'shelf':
         standoff_distance = -0.2
         standoff_offset = -10
         ik_collision_avoidance = True
+        interpolate = False
     else:
         print('unsupported scene type:', scene_type)
         sys.exit(1)
@@ -317,7 +319,8 @@ if __name__ == '__main__':
                 print('start planning')
                 start = time.time()
                 plan, dQ, cost = planner.plan_goalset(qc, RT_grasps_base, sdf_cost_all, sdf_cost_obstacle, 
-                                                      env.base_position, q_solutions, use_standoff=True, axis_standoff=cfg['axis_standoff'])
+                                                      env.base_position, q_solutions, use_standoff=True, 
+                                                      axis_standoff=cfg['axis_standoff'], interpolate=interpolate)
                 planning_time = time.time() - start
                 print('plannnig time', planning_time, 'cost', cost)
                 

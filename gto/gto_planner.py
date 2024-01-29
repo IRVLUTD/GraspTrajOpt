@@ -172,7 +172,7 @@ class GTOPlanner:
         return Q.toarray(), dQ.toarray(), cost.toarray().flatten()
     
 
-    def plan_goalset(self, qc, RTs, sdf_cost_all, sdf_cost_obstacle, base_position, q_solutions=None, use_standoff=True, axis_standoff='x'):
+    def plan_goalset(self, qc, RTs, sdf_cost_all, sdf_cost_obstacle, base_position, q_solutions=None, use_standoff=True, axis_standoff='x', interpolate=True):
         n = RTs.shape[0]
         self.setup_optimization(goal_size=n, use_standoff=use_standoff, axis_standoff=axis_standoff)
         tf_goal = np.zeros((16, n))
@@ -200,11 +200,13 @@ class GTOPlanner:
                 cost_all.append(cost)
                 dist_all.append(dist)    # large cost reach is better
             ind = np.lexsort((dist_all, cost_all))   # sort by cost, then by distance
-            # Q0 = optas.DM(plan_all[ind[0]])
             print('intialize with solution', ind[0])
-            Q0 = optas.diag(qc) @ optas.DM.ones(self.robot.ndof, self.T)
-            for i in range(self.T + self.standoff_offset, self.T):
-                Q0[:, i] = plan_all[ind[0]][:, self.T - 1]
+            if interpolate:
+                Q0 = optas.DM(plan_all[ind[0]])
+            else:
+                Q0 = optas.diag(qc) @ optas.DM.ones(self.robot.ndof, self.T)
+                for i in range(self.T + self.standoff_offset, self.T):
+                    Q0[:, i] = plan_all[ind[0]][:, self.T - 1]
 
         # Set initial seed, note joint velocity will be set to zero
         self.solver.reset_initial_seed(
