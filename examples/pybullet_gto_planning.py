@@ -135,16 +135,20 @@ if __name__ == '__main__':
     if scene_type == 'tabletop':
         standoff_distance = -0.1
         standoff_offset = -10
-        ik_collision_avoidance = False
+        ik_collision_avoidance = True
+        ik_collision_threshold = 5
         interpolate = True
     elif scene_type == 'shelf':
         standoff_distance = -0.2
         standoff_offset = -10
         ik_collision_avoidance = True
+        ik_collision_threshold = 0.001
         interpolate = False
     else:
         print('unsupported scene type:', scene_type)
         sys.exit(1)
+    # define the standoff pose for collision checking
+    offset = -0.01    
 
     # load config file
     root_dir = get_root_dir()
@@ -157,9 +161,7 @@ if __name__ == '__main__':
     
     # load robot model
     robot_model_dir = os.path.join(root_dir, 'data', 'robots', cfg['robot_name'])
-    urdf_filename = os.path.join(root_dir, cfg['urdf_robot_path']) 
-    # define the standoff pose for collision checking
-    offset = -0.01    
+    urdf_filename = os.path.join(root_dir, cfg['urdf_robot_path'])  
 
     robot = GTORobotModel(robot_model_dir,
                           urdf_filename=urdf_filename, 
@@ -202,7 +204,7 @@ if __name__ == '__main__':
             results = {}
             set_objects = set(object_order)
             for object_name in object_order:
-                # if object_name != '035_power_drill':
+                # if object_name != '011_banana':
                 #     env.reset_objects(object_name)
                 #     set_objects.remove(object_name)
                 #     continue
@@ -296,7 +298,7 @@ if __name__ == '__main__':
                         RT_off = RT
                     q_solution, err_pos, err_rot, cost_collision = ik_solver.solve_ik(q0, RT_off, sdf_cost_obstacle, env.base_position)
                     q_solutions[:, i] = q_solution
-                    if err_pos < 0.01 and err_rot < 5 and cost_collision < 0.001:
+                    if err_pos < 0.01 and err_rot < 5 and cost_collision < ik_collision_threshold:
                         found_ik[i] = 1
                         # if args.vis:
                         #     visualize_pose(robot, env.base_position, q_solution, depth_pc)

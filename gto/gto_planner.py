@@ -100,7 +100,7 @@ class GTOPlanner:
                 points_standoff_goal = tf_gripper_standoff[:3, :3] @ self.gripper_points.T + tf_gripper_standoff[:3, 3].reshape((3, 1))
                 cost[i] = optas.sumsqr(points_tf - points_tf_goal) + optas.sumsqr(points_standoff - points_standoff_goal)
             else:
-                cost[i] = optas.sumsqr(points_tf - points_tf_goal) 
+                cost[i] = optas.sumsqr(points_tf - points_tf_goal)
         builder.add_cost_term("cost_pos", optas.mmin(cost))
 
         # obstacle avoidance
