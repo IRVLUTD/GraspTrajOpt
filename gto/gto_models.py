@@ -182,13 +182,14 @@ class GTORobotModel(RobotModel):
         return offsets
     
 
-    def compute_plan_cost(self, plan, sdf_cost):
+    def compute_plan_cost(self, plan, sdf_cost, base_position):
         T = plan.shape[1]
         cost = 0
         for i in range(T):
             q = plan[:, i]
             points_base, _ = self.compute_fk_surface_points(q)
-            offset = self.points_to_offsets_numpy(points_base).astype(int)
+            points_world = points_base + np.array(base_position).reshape(1, 3)
+            offset = self.points_to_offsets_numpy(points_world).astype(int)
             cost += np.sum(sdf_cost[offset])
         dist = np.linalg.norm(plan[:, 0] - plan[:, T-1])
         return cost, dist
@@ -232,6 +233,7 @@ if __name__ == "__main__":
                           param_joints=cfg['param_joints'],
                           collision_link_names=cfg['collision_link_names'])
     robot_model.setup_workspace_field(arm_len=cfg['arm_len'], arm_height=cfg['arm_height'])
+    print(robot_model.link_names)
 
     # forward kinematics
     q_user_input = [0.0] * robot_model.ndof

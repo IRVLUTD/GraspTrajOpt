@@ -24,6 +24,7 @@ robot_cfg:
       "panda_link6",
       "panda_link7",
       "panda_hand",
+      "panda_hand_camera",
       "panda_leftfinger",
       "panda_rightfinger",
     ]

@@ -14,7 +14,7 @@ from optas.visualize import Visualizer
 from gto.gto_models import GTORobotModel
 from gto.gto_planner import GTOPlanner
 from gto.ik_solver import IKSolver
-from gto.utils import load_yaml, get_root_dir, visualize_plan
+from gto.utils import load_yaml, get_root_dir, visualize_plan, visualize_pose
 from transforms3d.quaternions import mat2quat
     
 
@@ -49,12 +49,12 @@ def debug_plan(robot, gripper_model, base_position, plan, depth_pc, sdf_cost, RT
     for i in range(30, T):
         q = plan[:, i]
         points_base, _ = robot.compute_fk_surface_points(q)
-        offset = robot.points_to_offsets_numpy(points_base).astype(int)
+        points_world = points_base + base_position.reshape(1, 3)
+        offset = robot.points_to_offsets_numpy(points_world).astype(int)
         cost = np.sum(sdf_cost[offset])
         print(f'time step {i}, sdf cost {cost}')
 
-        workspace_points = robot.workspace_points + base_position.reshape((1, 3))
-        points_world = points_base + base_position.reshape((1, 3))
+        workspace_points = robot.workspace_points
         vis = Visualizer(camera_position=[3, 0, 3])
         vis.grid_floor()
         vis.points(depth_pc.points, rgb=[1, 1, 1])
@@ -202,7 +202,7 @@ if __name__ == '__main__':
                 target_mask = mask == idx
                 depth_pc = DepthPointCloud(depth, intrinsic_matrix, cam_pose, target_mask=None, threshold=cfg['depth_threshold'])
                 robot.setup_points_field(depth_pc.points)
-                world_points = robot.workspace_points + env.base_position.reshape((1, 3))
+                world_points = robot.workspace_points
                 sdf_cost_all = depth_pc.get_sdf_cost(world_points)
 
                 # compute sdf cost obstacle
@@ -270,6 +270,7 @@ if __name__ == '__main__':
                 # test IK for remaining grasps
                 print('start IK')
                 start = time.time()
+                ik_solver.setup_optimization()
                 n = RT_grasps_world.shape[0]
                 RT_grasps_base = RT_grasps_world.copy()
                 found_ik = np.zeros((n, ), dtype=np.int32)
@@ -280,10 +281,14 @@ if __name__ == '__main__':
                     # change world to robot base
                     RT[:3, 3] -= env.base_position
                     RT_grasps_base[i] = RT.copy()
-                    q_solution, err_pos, err_rot = ik_solver.solve_ik(q0, RT)
+                    RT_off = RT @ env.robot.get_standoff_pose(-0.2, cfg['axis_standoff'])
+                    q_solution, err_pos, err_rot, cost_collision = ik_solver.solve_ik(q0, RT_off, sdf_cost_obstacle, env.base_position)
                     q_solutions[:, i] = q_solution
-                    if err_pos < 0.01 and err_rot < 5:
+                    if err_pos < 0.01 and err_rot < 5 and cost_collision < 0.001:
                         found_ik[i] = 1
+                        # if args.vis:
+                        #     visualize_pose(robot, env.base_position, q_solution, depth_pc)
+
                 RT_grasps_world = RT_grasps_world[found_ik == 1] 
                 RT_grasps_base = RT_grasps_base[found_ik == 1]
                 q_solutions = q_solutions[:, found_ik == 1]
@@ -301,15 +306,14 @@ if __name__ == '__main__':
                 qc = env.robot.q()
                 print('start planning')
                 start = time.time()
-                plan, dQ, cost = planner.plan_goalset(qc, RT_grasps_base, sdf_cost_all, sdf_cost_obstacle, sdf_cost_target, q_solutions, use_standoff=True, axis_standoff=cfg['axis_standoff'])
-                # plan, cost = planner.plan(qc, RT_grasps_base[0], sdf_cost_obstacle, q_solutions[:, 0], use_standoff=True, axis_standoff=axis_standoff)
+                plan, dQ, cost = planner.plan_goalset(qc, RT_grasps_base, sdf_cost_all, sdf_cost_obstacle, sdf_cost_target, 
+                                                      env.base_position, q_solutions, use_standoff=True, axis_standoff=cfg['axis_standoff'])
                 planning_time = time.time() - start
                 print('plannnig time', planning_time, 'cost', cost)
                 
-                # debug_plan(robot, gripper_model, env.base_position, plan, depth_pc, sdf_cost_all, RT_grasps_world, show_grasp=False)
-
                 if args.vis:
                     visualize_plan(robot, gripper_model, env.base_position, plan, depth_pc, RT_grasps_world)
+                    # debug_plan(robot, gripper_model, env.base_position, plan, depth_pc, sdf_cost_all, RT_grasps_world, show_grasp=False)
 
                 env.robot.execute_plan(plan)
                 env.robot.close_gripper()

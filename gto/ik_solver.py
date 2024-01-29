@@ -17,14 +17,14 @@ from transforms3d.quaternions import mat2quat
 
 class IKSolver:
 
-    def __init__(self, robot, link_ee, link_gripper):
+    def __init__(self, robot, link_ee, link_gripper, collision_avoidance=True):
         self.robot = robot
         self.link_ee = link_ee
         self.link_gripper = link_gripper
         self.robot_name = robot.get_name()
         self.gripper_points = robot.surface_pc_map[link_gripper].points
         self.gripper_tf = robot.get_link_transform_function(link=link_gripper, base_link=link_ee)
-        self.setup_optimization()
+        self.collision_avoidance = collision_avoidance
 
 
     def setup_optimization(self):
@@ -34,6 +34,10 @@ class IKSolver:
         # setup parameters
         # tf goal is for link_ee
         tf_goal = builder.add_parameter("tf_goal", 4, 4)
+        # sdf field
+        sdf_cost_obstacle = builder.add_parameter("sdf_cost_obstacle", self.robot.field_size)
+        # base position
+        base_position = builder.add_parameter("base_position", 3)
 
         # get robot state variables
         q_T = builder.get_robot_states_and_parameters(self.robot_name)
@@ -49,17 +53,35 @@ class IKSolver:
         points_tf_goal = tf_gripper_goal[:3, :3] @ self.gripper_points.T + tf_gripper_goal[:3, 3].reshape((3, 1))
         builder.add_cost_term("cost_pos", optas.sumsqr(points_tf - points_tf_goal))
 
+        # obstacle avoidance
+        if self.collision_avoidance:
+            points_world_all = None
+            for name in self.robot.surface_pc_map.keys():
+                tf = self.robot.visual_tf[name](q_T)
+                points = self.robot.surface_pc_map[name].points
+                points_world = tf[:3, :3] @ points.T + tf[:3, 3].reshape((3, 1)) + base_position.reshape((3, 1))
+                if points_world_all == None:
+                    points_world_all = points_world
+                else:
+                    points_world_all = optas.horzcat(points_world_all, points_world)
+            points_world_all = points_world_all.T
+            offsets = self.robot.points_to_offsets(points_world_all)
+            builder.add_cost_term("cost_obstacle", 10 * optas.sum1(sdf_cost_obstacle[offsets]))
+
         # Constraint: joint position limits
         builder.enforce_model_limits(self.robot_name)  # joint limits extracted from URDF
 
         # setup solver
-        self.solver = optas.CasADiSolver(builder.build()).setup("ipopt")    
+        solver_options = {'ipopt': {'max_iter': 50, 'tol': 1e-15}}
+        self.solver = optas.CasADiSolver(builder.build()).setup("ipopt", solver_options=solver_options)    
 
 
-    def solve_ik(self, q_0, RT):
+    def solve_ik(self, q_0, RT, sdf_cost_obstacle, base_position):
         self.solver.reset_initial_seed({f"{self.robot_name}/q/x": self.robot.extract_optimized_dimensions(q_0)})
-        self.solver.reset_parameters({f"{self.robot_name}/q/p": self.robot.extract_parameter_dimensions(q_0), 
-                                        "tf_goal": RT}) 
+        self.solver.reset_parameters({f"{self.robot_name}/q/p": self.robot.extract_parameter_dimensions(q_0),
+                                        "sdf_cost_obstacle": optas.DM(sdf_cost_obstacle),
+                                        "base_position": optas.DM(base_position),
+                                        "tf_goal": RT})
         solution = self.solver.solve()
         q = solution[f"{self.robot_name}/q"]
 
@@ -69,13 +91,16 @@ class IKSolver:
         quat1 = mat2quat(RT[:3, :3])
         quat2 = mat2quat(tf[:3, :3])
         err_rot = np.arccos(np.clip(2 * np.square(np.dot(quat1, quat2)) - 1, -1, 1)) * 180 / np.pi
+        plan = q.toarray().reshape(-1, 1)
+        cost, _ = self.robot.compute_plan_cost(plan, sdf_cost_obstacle, base_position)
 
         print("***********************************") 
         print("Casadi IK solution:")
         print(q, q.shape)
         print('position error', err_pos)
         print('rotation error in degree', err_rot)
-        return q.toarray().flatten(), err_pos, err_rot
+        print('collision cost', cost)
+        return q.toarray().flatten(), err_pos, err_rot, cost
 
 
 def make_args():
@@ -127,11 +152,13 @@ if __name__ == "__main__":
     robot = GTORobotModel(model_dir, urdf_filename=urdf_filename, 
                           param_joints=cfg['param_joints'],
                           collision_link_names=cfg['collision_link_names']) 
+    robot.setup_workspace_field(arm_len=cfg['arm_len'], arm_height=cfg['arm_height'])
     robot_name = robot.get_name()
     print('optimized joint names:', robot.optimized_joint_names)
 
     # solve problem
     ik_solver = IKSolver(robot, cfg['link_ee'], cfg['link_gripper'])
+    ik_solver.setup_optimization()
     q_0 = np.zeros((robot.ndof, 1), dtype=np.float32)
     if robot_name == 'fetch':
         q_0[2, 0] = 0.38
@@ -139,7 +166,9 @@ if __name__ == "__main__":
         q_0[4, 0] = 0.908270
         q_0[12, 0] = 0.05
         q_0[13, 0] = 0.05
-    q_solution, err_pos, err_rot = ik_solver.solve_ik(q_0, RT)
+    sdf_cost_obstacle = np.zeros(robot.field_size)
+    base_position = [0, 0, 0]
+    q_solution, err_pos, err_rot, cost = ik_solver.solve_ik(q_0, RT, sdf_cost_obstacle, base_position)
     lo = robot.lower_actuated_joint_limits.toarray()
     hi = robot.upper_actuated_joint_limits.toarray()
     for i in range(robot.ndof):

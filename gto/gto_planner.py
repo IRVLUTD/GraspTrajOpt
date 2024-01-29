@@ -22,12 +22,12 @@ class GTOPlanner:
     def __init__(self, robot, link_ee, link_gripper, collision_avoidance=True):
         
         # trajectory parameters
-        self.T = 100  # no. time steps in trajectory
+        self.T = 50  # no. time steps in trajectory
         self.Tmax = 10.0  # trajectory of 5 secs
         t = optas.linspace(0, self.Tmax, self.T)
         self.dt = float((t[1] - t[0]).toarray()[0, 0])  # time step
         self.standoff_offset = -10
-        self.standoff_distance = -0.1     
+        self.standoff_distance = -0.2     
 
         # Setup robot
         self.robot = robot
@@ -52,6 +52,8 @@ class GTOPlanner:
         # sdf field
         sdf_cost_obstacle = builder.add_parameter("sdf_cost_obstacle", self.robot.field_size)
         sdf_cost_target = builder.add_parameter("sdf_cost_target", self.robot.field_size)
+        # base position
+        base_position = builder.add_parameter("base_position", 3)        
 
         # Constraint: initial configuration
         builder.initial_configuration(
@@ -84,7 +86,8 @@ class GTOPlanner:
         tf = tf_gripper[self.T - 1]    # last time step pose
         points_tf = tf[:3, :3] @ self.gripper_points.T + tf[:3, 3].reshape((3, 1))
 
-        offsets_gripper = self.robot.points_to_offsets(points_tf.T)
+        points_gripper_world = points_tf + base_position.reshape((3, 1))
+        offsets_gripper = self.robot.points_to_offsets(points_gripper_world.T)
         cost_reach = -5 * optas.sumsqr(sdf_cost_target[offsets_gripper])
 
         if use_standoff:
@@ -108,20 +111,20 @@ class GTOPlanner:
 
         # obstacle avoidance
         if self.collision_avoidance:
-            points_base_all = None
+            points_world_all = None
             for i in range(self.T):
                 q = Q[:, i]
                 for name in self.robot.surface_pc_map.keys():
                     tf = self.robot.visual_tf[name](q)
                     points = self.robot.surface_pc_map[name].points
-                    point_base = tf[:3, :3] @ points.T + tf[:3, 3].reshape((3, 1))
-                    if points_base_all == None:
-                        points_base_all = point_base
+                    points_world = tf[:3, :3] @ points.T + tf[:3, 3].reshape((3, 1)) + base_position.reshape((3, 1))
+                    if points_world_all == None:
+                        points_world_all = points_world
                     else:
-                        points_base_all = optas.horzcat(points_base_all, point_base)
-            points_base_all = points_base_all.T
-            offsets = self.robot.points_to_offsets(points_base_all)
-            builder.add_cost_term("cost_obstacle", 10 * optas.sum1(sdf_cost_obstacle[offsets]))
+                        points_world_all = optas.horzcat(points_world_all, points_world)
+            points_world_all = points_world_all.T
+            offsets = self.robot.points_to_offsets(points_world_all)
+            builder.add_cost_term("cost_obstacle", 10 * optas.sumsqr(sdf_cost_obstacle[offsets]))
 
         # Cost: minimize joint velocity
         dQ = builder.get_robot_states_and_parameters(self.robot_name, time_deriv=1)
@@ -135,7 +138,7 @@ class GTOPlanner:
         self.solver = optas.CasADiSolver(builder.build()).setup("ipopt", solver_options=solver_options)
 
 
-    def plan(self, qc, RT, sdf_cost_obstacle, sdf_cost_target, q_solution=None, use_standoff=True, axis_standoff='x'):
+    def plan(self, qc, RT, sdf_cost_obstacle, sdf_cost_target, base_position, q_solution=None, use_standoff=True, axis_standoff='x'):
         self.setup_optimization(goal_size=1, use_standoff=use_standoff, axis_standoff=axis_standoff)
         tf_goal = np.zeros((16, 1))
         tf_goal[:, 0] = RT.flatten()
@@ -161,6 +164,7 @@ class GTOPlanner:
                 "tf_goal": optas.DM(tf_goal),
                 "sdf_cost_obstacle": optas.DM(sdf_cost_obstacle),
                 "sdf_cost_target": optas.DM(sdf_cost_target),
+                "base_position": optas.DM(base_position),
                 f"{self.robot_name}/q/p": self.robot.extract_parameter_dimensions(Q0),
             }
         )
@@ -175,7 +179,7 @@ class GTOPlanner:
         return Q.toarray(), dQ.toarray(), cost.toarray().flatten()
     
 
-    def plan_goalset(self, qc, RTs, sdf_cost_all, sdf_cost_obstacle, sdf_cost_target, q_solutions=None, use_standoff=False, axis_standoff='x'):
+    def plan_goalset(self, qc, RTs, sdf_cost_all, sdf_cost_obstacle, sdf_cost_target, base_position, q_solutions=None, use_standoff=True, axis_standoff='x'):
         n = RTs.shape[0]
         self.setup_optimization(goal_size=n, use_standoff=use_standoff, axis_standoff=axis_standoff)
         tf_goal = np.zeros((16, n))
@@ -198,12 +202,14 @@ class GTOPlanner:
                 data[:, index] = np.array(qc)[index]
                 plan = data.T
                 plan_all.append(plan)
-                cost, dist = self.robot.compute_plan_cost(plan, sdf_cost_obstacle)
+                cost, dist = self.robot.compute_plan_cost(plan, sdf_cost_obstacle, base_position)
                 print(f'plan {i}, cost {cost:.2f}, distance {dist:.2f}')
                 cost_all.append(cost)
                 dist_all.append(dist)
             ind = np.lexsort((dist_all, cost_all))   # sort by cost, then by distance
-            Q0 = optas.DM(plan_all[ind[0]])
+            # Q0 = optas.DM(plan_all[ind[0]])
+            Q0 = optas.diag(qc) @ optas.DM.ones(self.robot.ndof, self.T)
+            Q0[:, self.T - 1] = plan_all[ind[0]][:, self.T - 1]
 
         # Set initial seed, note joint velocity will be set to zero
         self.solver.reset_initial_seed(
@@ -217,6 +223,7 @@ class GTOPlanner:
                 "tf_goal": optas.DM(tf_goal),
                 "sdf_cost_obstacle": optas.DM(sdf_cost_all),
                 "sdf_cost_target": optas.DM(sdf_cost_target),
+                "base_position": optas.DM(base_position),
                 f"{self.robot_name}/q/p": self.robot.extract_parameter_dimensions(Q0),
             }
         )
@@ -289,13 +296,15 @@ if __name__ == "__main__":
     sdf_cost_obstacle = np.zeros(robot.field_size)
     sdf_cost_target = np.zeros(robot.field_size)
     qc = np.array(cfg['default_pose'])
+    base_position = [0, 0, 0]
 
     # solve IK first
     ik_solver = IKSolver(robot, cfg['link_ee'], cfg['link_gripper'])
-    q_solution, err_pos, err_rot = ik_solver.solve_ik(qc.reshape(-1, 1), RT)
+    ik_solver.setup_optimization()
+    q_solution, err_pos, err_rot, cost_ik = ik_solver.solve_ik(qc.reshape(-1, 1), RT, sdf_cost_obstacle, base_position)
 
     # Plan trajectory 
-    plan, dQ, cost = planner.plan(qc, RT, sdf_cost_obstacle, sdf_cost_target, q_solution, use_standoff=True, axis_standoff=cfg['axis_standoff'])
+    plan, dQ, cost = planner.plan(qc, RT, sdf_cost_obstacle, sdf_cost_target, base_position, q_solution, use_standoff=True, axis_standoff=cfg['axis_standoff'])
     print(plan.shape)
 
     lo = robot.lower_actuated_joint_limits.toarray()
