@@ -138,12 +138,14 @@ if __name__ == '__main__':
         ik_collision_avoidance = True
         ik_collision_threshold = 5
         interpolate = True
+        orderings = ["nearest_first", "random"]
     elif scene_type == 'shelf':
         standoff_distance = -0.2
         standoff_offset = -10
         ik_collision_avoidance = True
         ik_collision_threshold = 0.001
         interpolate = False
+        orderings = ["random"]
     else:
         print('unsupported scene type:', scene_type)
         sys.exit(1)
@@ -196,7 +198,7 @@ if __name__ == '__main__':
 
         # two orderings
         results_ordering = {}
-        for ordering in ["nearest_first", "random"]:
+        for ordering in orderings:
             object_order = meta[ordering][0].split(",")
             print(ordering, object_order)
             
@@ -364,6 +366,6 @@ if __name__ == '__main__':
         os.mkdir(outdir)
     curr_time = datetime.datetime.now()
     exp_time = "{:%y-%m-%d_T%H%M%S}".format(curr_time)        
-    filename = os.path.join(outdir, f'GTO_scenereplica_{robot_name}_{exp_time}.json')
+    filename = os.path.join(outdir, f'GTO_scenereplica_{robot_name}_{scene_type}_{exp_time}.json')
     with open(filename, "w") as outfile: 
         json.dump(results_scene, outfile)

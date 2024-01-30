@@ -38,6 +38,13 @@ def make_args():
         help="SceneReplica scene id",
     )
     parser.add_argument(
+        "-t",
+        "--scene_type",
+        type=str,
+        default="tabletop",
+        help="tabletop or shelf",
+    )      
+    parser.add_argument(
         "-f",
         "--file",
         type=str,
@@ -56,7 +63,17 @@ if __name__ == '__main__':
     data_dir = args.data_dir
     scene_id = args.scene_id
     filename = args.file
+    scene_type = args.scene_type
     assert robot_name in filename, f"result file {filename} is not for robot {robot_name}"
+    assert scene_type in filename, f"result file {filename} is not for scene type {scene_type}"
+
+    if scene_type == 'tabletop':
+        orderings = ["nearest_first", "random"]
+    elif scene_type == 'shelf':
+        orderings = ["random"]
+    else:
+        print('unsupported scene type:', scene_type)
+        sys.exit(1)    
 
     # load config file
     root_dir = get_root_dir()
@@ -77,7 +94,7 @@ if __name__ == '__main__':
                           collision_link_names=cfg['collision_link_names'])
 
     # create the table environment
-    env = SceneReplicaEnv(data_dir, robot_name)
+    env = SceneReplicaEnv(data_dir, robot_name, scene_type)
 
     # load results
     with open(filename, "r") as outfile: 
@@ -101,7 +118,7 @@ if __name__ == '__main__':
 
         # two orderings
         results_ordering = results_scene[f'{scene_id}']
-        for ordering in ["nearest_first", "random"]:
+        for ordering in orderings:
             object_order = meta[ordering][0].split(",")
             print(ordering, object_order)
             
@@ -145,7 +162,7 @@ if __name__ == '__main__':
                 env.reset_objects(object_name)
 
     # print output
-    print('-----------------------------------')
+    print(f'-----------------{scene_type} scenes------------------')
     count = 0
     for obj in env.ycb_object_names:
         print(f'{obj}, success {object_success[obj]}, total {object_count[obj]}')
