@@ -300,8 +300,9 @@ if __name__ == "__main__":
     q_solution, err_pos, err_rot, cost_ik = ik_solver.solve_ik(qc.reshape(-1, 1), RT, sdf_cost_obstacle, base_position)
 
     # Plan trajectory 
-    plan, dQ, cost = planner.plan(qc, RT, sdf_cost_obstacle, sdf_cost_target, base_position, q_solution, use_standoff=True, axis_standoff=cfg['axis_standoff'])
-    print(plan.shape)
+    plan, dQ, cost = planner.plan(qc, RT, sdf_cost_obstacle, base_position, q_solution, use_standoff=True, axis_standoff=cfg['axis_standoff'])
+    print('plan shape', plan.shape)
+    print('dQ shape', dQ.shape)
 
     lo = robot.lower_actuated_joint_limits.toarray()
     hi = robot.upper_actuated_joint_limits.toarray()
