@@ -142,7 +142,7 @@ if __name__ == '__main__':
     elif scene_type == 'shelf':
         standoff_distance = -0.2
         standoff_offset = -10
-        ik_collision_avoidance = True
+        ik_collision_avoidance = False
         ik_collision_threshold = 0.001
         interpolate = False
         orderings = ["random"]
