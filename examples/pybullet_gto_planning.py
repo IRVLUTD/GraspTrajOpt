@@ -135,7 +135,7 @@ if __name__ == '__main__':
     if scene_type == 'tabletop':
         standoff_distance = -0.1
         standoff_offset = -10
-        ik_collision_avoidance = True
+        ik_collision_avoidance = False
         ik_collision_threshold = 5
         interpolate = True
         orderings = ["nearest_first", "random"]

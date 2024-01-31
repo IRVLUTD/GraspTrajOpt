@@ -50,9 +50,10 @@ class GTOPlanner:
         # goal pose of the gripper link_ee
         tf_goal = builder.add_parameter("tf_goal", 16, goal_size)
         # sdf field
+        sdf_cost_all = builder.add_parameter("sdf_cost_all", self.robot.field_size)
         sdf_cost_obstacle = builder.add_parameter("sdf_cost_obstacle", self.robot.field_size)
         # base position
-        base_position = builder.add_parameter("base_position", 3)        
+        base_position = builder.add_parameter("base_position", 3)  
 
         # Constraint: initial configuration
         builder.initial_configuration(
@@ -105,20 +106,29 @@ class GTOPlanner:
 
         # obstacle avoidance
         if self.collision_avoidance:
-            points_world_all = None
+            points_world_standoff = None
+            points_world_goal = None
             for i in range(self.T):
                 q = Q[:, i]
                 for name in self.robot.surface_pc_map.keys():
                     tf = self.robot.visual_tf[name](q)
                     points = self.robot.surface_pc_map[name].points
                     points_world = tf[:3, :3] @ points.T + tf[:3, 3].reshape((3, 1)) + base_position.reshape((3, 1))
-                    if points_world_all is None:
-                        points_world_all = points_world
+                    if i < self.T + self.standoff_offset:
+                        if points_world_standoff is None:
+                            points_world_standoff = points_world
+                        else:
+                            points_world_standoff = optas.horzcat(points_world_standoff, points_world)
                     else:
-                        points_world_all = optas.horzcat(points_world_all, points_world)
-            points_world_all = points_world_all.T
-            offsets = self.robot.points_to_offsets(points_world_all)
-            builder.add_cost_term("cost_obstacle", 10 * optas.sumsqr(sdf_cost_obstacle[offsets]))
+                        if points_world_goal is None:
+                            points_world_goal = points_world
+                        else:
+                            points_world_goal = optas.horzcat(points_world_goal, points_world)                        
+            points_world_standoff = points_world_standoff.T
+            points_world_goal = points_world_goal.T
+            offsets_standoff = self.robot.points_to_offsets(points_world_standoff)
+            offsets_goal = self.robot.points_to_offsets(points_world_goal)
+            builder.add_cost_term("cost_obstacle", 10 * (optas.sumsqr(sdf_cost_all[offsets_standoff]) + optas.sumsqr(sdf_cost_obstacle[offsets_goal])))
 
         # Cost: minimize joint velocity
         dQ = builder.get_robot_states_and_parameters(self.robot_name, time_deriv=1)
@@ -218,7 +228,8 @@ class GTOPlanner:
             {
                 "qc": optas.DM(qc),
                 "tf_goal": optas.DM(tf_goal),
-                "sdf_cost_obstacle": optas.DM(sdf_cost_all),
+                "sdf_cost_all": optas.DM(sdf_cost_all),
+                "sdf_cost_obstacle": optas.DM(sdf_cost_obstacle),
                 "base_position": optas.DM(base_position),
                 f"{self.robot_name}/q/p": self.robot.extract_parameter_dimensions(Q0),
             }
