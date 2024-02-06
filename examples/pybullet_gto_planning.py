@@ -14,7 +14,7 @@ from optas.visualize import Visualizer
 from gto.gto_models import GTORobotModel
 from gto.gto_planner import GTOPlanner
 from gto.ik_solver import IKSolver
-from gto.utils import load_yaml, get_root_dir, visualize_plan, visualize_pose
+from gto.utils import *
 from transforms3d.quaternions import mat2quat
     
 
@@ -41,51 +41,7 @@ def load_grasps(data_dir, robot_name, model):
             RT_grasps = simulator_grasp.item()[b"transforms"]
         offset_pose = np.array(rotZ(np.pi / 2))  # and
         RT_grasps = np.matmul(RT_grasps, offset_pose)  # flip x, y 
-    return RT_grasps
-
-
-def debug_plan(robot, gripper_model, base_position, plan, depth_pc, sdf_cost, RT_grasps_world, show_grasp=True):
-    T = plan.shape[1]
-    for i in range(30, T):
-        q = plan[:, i]
-        points_base, _ = robot.compute_fk_surface_points(q)
-        points_world = points_base + base_position.reshape(1, 3)
-        offset = robot.points_to_offsets_numpy(points_world).astype(int)
-        cost = np.sum(sdf_cost[offset])
-        print(f'time step {i}, sdf cost {cost}')
-
-        workspace_points = robot.workspace_points
-        vis = Visualizer(camera_position=[3, 0, 3])
-        vis.grid_floor()
-        vis.points(depth_pc.points, rgb=[1, 1, 1])
-        index = sdf_cost[offset] > 0
-        vis.points(points_world[~index], rgb=[0, 1, 1], size=5)
-        vis.points(points_world[index], rgb=[1, 0, 0], size=5)
-        index = sdf_cost > 0
-        vis.points(workspace_points[index], rgb=[1, 1, 0], size=3)
-        # vis.points(workspace_points[index], rgb=[0, 1, 0], size=10)        
-        vis.robot(
-            robot,
-            base_position=base_position,
-            q=q,
-            alpha = 1,
-        )
-        if show_grasp:
-            q = [0, 0]
-            for i in range(RT_grasps_world.shape[0]):
-                RT = RT_grasps_world[i]
-                position = RT[:3, 3]
-                # scalar-last (x, y, z, w) format in optas
-                quat = mat2quat(RT[:3, :3])
-                orientation = [quat[1], quat[2], quat[3], quat[0]]
-                vis.robot(
-                    gripper_model,
-                    base_position=position,
-                    base_orientation=orientation,
-                    q=q,
-                    alpha = 0.3,
-                )   
-        vis.start()      
+    return RT_grasps    
 
 
 def make_args():
@@ -206,7 +162,7 @@ if __name__ == '__main__':
             results = {}
             set_objects = set(object_order)
             for object_name in object_order:
-                # if object_name != '011_banana':
+                # if object_name != '003_cracker_box':
                 #     env.reset_objects(object_name)
                 #     set_objects.remove(object_name)
                 #     continue
@@ -223,6 +179,9 @@ if __name__ == '__main__':
                 robot.setup_points_field(depth_pc.points)
                 world_points = robot.workspace_points
                 sdf_cost_all = depth_pc.get_sdf_cost(world_points)
+
+                # q0 = np.array(env.robot.q()).reshape((env.robot.ndof, 1))
+                # visualize_pose(robot, env.base_position, q0, depth_pc)
 
                 # compute sdf cost obstacle
                 depth_obstacle = depth.copy()
@@ -318,6 +277,13 @@ if __name__ == '__main__':
                                          'ik_time': ik_time, 'planning_time': None}
                     continue
 
+                # visualize grasp
+                # model_dir = os.path.join(args.data_dir, "models")
+                # RT = RT_grasps_world[0]
+                # RT_off = RT @ env.robot.get_standoff_pose(standoff_distance, cfg['axis_standoff'])
+                # visualize_standoff(cfg, model_dir, object_name, gripper_model, RT, RT_off, RT_obj)
+                # visualize_grasp(cfg, robot, gripper_model, env.base_position, q0, depth_pc, RT_grasps_world[0])
+
                 # plan to a grasp set
                 qc = env.robot.q()
                 print('start planning')
@@ -334,6 +300,7 @@ if __name__ == '__main__':
 
                 env.robot.execute_plan(plan)
                 env.robot.close_gripper()
+                env.record_gripper_position()
                 time.sleep(1.0)
 
                 # retrieve object

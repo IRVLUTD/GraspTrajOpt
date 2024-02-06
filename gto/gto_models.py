@@ -120,6 +120,17 @@ class GTORobotModel(RobotModel):
         return points_base_all.T, normals_base_all.T
     
 
+    def compute_fk_link_surface_points(self, q_user_input, name, tf_base=None):
+        tf = self.visual_tf[name](q_user_input).toarray()
+        if tf_base is not None:
+            tf = tf_base @ tf
+        surface_pc = self.surface_pc_map[name]
+        points = surface_pc.points
+        # transform points
+        points_base = tf[:3, :3] @ np.transpose(points) + tf[:3, 3].reshape((3, 1))
+        return points_base.T
+    
+
     def setup_workspace_field(self, arm_len, arm_height):
         self.xlim = [0, arm_len]
         self.ylim = [-arm_len, arm_len]
@@ -238,16 +249,17 @@ if __name__ == "__main__":
                           urdf_filename=urdf_filename, 
                           time_derivs=[0, 1],  # i.e. joint position/velocity trajectory
                           param_joints=cfg['param_joints'],
-                          collision_link_names=cfg['collision_link_names'])
+                          collision_link_names=None)
     robot_model.setup_workspace_field(arm_len=cfg['arm_len'], arm_height=cfg['arm_height'])
     print(robot_model.link_names)
 
     # forward kinematics
-    q_user_input = [0.0] * robot_model.ndof
+    q_user_input = np.array([0.0] * robot_model.ndof)
     if robot_name == 'fetch':
         q_user_input[2] = 0.4
+        q_user_input[cfg['finger_index']] = 0.05
     elif robot_name == 'panda':
-        q_user_input = [0.0, -1.285, 0, -2.356 + 1.0, 0.0, 1.571 - 0.5, 0.785, 0.0, 0.0]
+        q_user_input = [0.0, -1.285, 0, -2.356, 0.0, 1.571, 0.785, 0.04, 0.04]
     points_base_all, normals_base_all = robot_model.compute_fk_surface_points(q_user_input)
     lo = robot_model.lower_actuated_joint_limits.toarray()
     hi = robot_model.upper_actuated_joint_limits.toarray()
@@ -260,12 +272,6 @@ if __name__ == "__main__":
         points_base_all,
         rgb = [1, 0, 0],
         size=5,
-    )
-    n = robot_model.workspace_points.shape[0]
-    index = np.random.permutation(n)[:10000]
-    vis.points(
-        robot_model.workspace_points[index],
-        rgb = [0, 1, 0],
     )
     vis.robot(
         robot_model,

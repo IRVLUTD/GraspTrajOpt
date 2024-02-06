@@ -318,8 +318,12 @@ class Fetch(FixedBaseRobot):
         # raise torso
         joint_command[2] = 0.4
         # move head
-        joint_command[3] = 0.009195
-        joint_command[4] = 0.908270
+        if self.scene_type == 'tabletop':
+            joint_command[3] = 0.009195
+            joint_command[4] = 0.908270
+        elif self.scene_type == 'shelf':
+            joint_command[3] = 0.009195
+            joint_command[4] = 0.348270
         # move arm
         index = [5, 6, 7, 8, 9, 10, 11]
         joint_command[index] = [1.32, 0.7, 0.0, -2.0, 0.0, -0.57, 0.0]

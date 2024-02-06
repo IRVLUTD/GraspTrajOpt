@@ -43,6 +43,7 @@ class SceneReplicaEnv():
             sys.exit(1)
         self.base_position = base_position
         self.arm_height = arm_height
+        self.recorded_gripper_position = None
 
         # load scene ids
         filename = os.path.join(data_dir, 'final_scenes', 'scene_ids.txt')
@@ -138,7 +139,7 @@ class SceneReplicaEnv():
             shelf_file = os.path.join(self.root_dir, '../data/objects/shelf/shelf.urdf')
             self.obj_path = [plane_file, shelf_file]
             # z_offset = -0.03  # difference between Real World and table CAD model
-            z_offset = base_position[2] + 0.25
+            z_offset = 0.7 + 0.25
             self.table_or_shelf_pos = np.array([0.9, 0, z_offset])
             self.shelf_orn = [0, 0, 1, 0]
             self.shelf_id = p.loadURDF(shelf_file, self.table_or_shelf_pos, self.shelf_orn)
@@ -443,10 +444,20 @@ class SceneReplicaEnv():
         """
         reward = 0
         pos_prev, _ = self.meta_poses[object_name]
+        pos_gripper_prev = self.recorded_gripper_position
+        dis_prev = np.linalg.norm(np.array(pos_prev) - np.array(pos_gripper_prev))
+
         pos, _ = self.get_object_pose(object_name)
-        if pos[2] > pos_prev[2] + 0.1:
+        pos_gripper, _ = p.getLinkState(self.robot._id, self.robot.ee_index)[:2]
+        dis = np.linalg.norm(np.array(pos) - np.array(pos_gripper))
+        if np.absolute(dis_prev - dis) < 0.1:
             reward = 1
-        return reward            
+        return reward
+
+
+    def record_gripper_position(self):
+        pos, orn = p.getLinkState(self.robot._id, self.robot.ee_index)[:2]
+        self.recorded_gripper_position = pos
 
 
     def retract(self, retract_distance=0.3):
@@ -543,4 +554,4 @@ if __name__ == '__main__':
     for scene_id in [36, 84, 68, 10, 77, 148, 48, 25, 104, 38, 27, 122, 141, 65, 39, 83, 130, 161, 33, 56]:
         env.setup_scene(scene_id)
         rgba, depth, mask, cam_pose, intrinsic_matrix = env.get_observation()
-        # input('end?')
+        input('next scene?')
