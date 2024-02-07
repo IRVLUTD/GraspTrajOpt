@@ -114,13 +114,14 @@ def debug_plan(robot, gripper_model, base_position, plan, depth_pc, sdf_cost, RT
         vis.start()  
 
 
-def visualize_plan(robot, gripper_model, base_position, plan, depth_pc, RT_grasps_world):
+def visualize_plan(robot, gripper_model, base_position, plan, depth_pc, depth_pc_obstacle, RT_grasps_world):
     # visualize grasps
     vis = Visualizer(camera_position=[-1, 3.0, 5.0])
     vis.grid_floor()
     vis.points(
-        depth_pc.points,
+        depth_pc_obstacle.points,
         rgb=[0, 1, 0],
+        size=5,
     )
     # q = [0, 0]
     # for i in range(RT_grasps_world.shape[0]):
@@ -136,22 +137,31 @@ def visualize_plan(robot, gripper_model, base_position, plan, depth_pc, RT_grasp
     #         q=q,
     #         alpha = 0.1,
     #     )
+
+    points_base_all = np.zeros((0, 3), dtype=np.float32)
+    for i in range(plan.shape[1]):
+        q = plan[:, i]
+        points_base, _ = robot.compute_fk_surface_points(q)
+        sdf = depth_pc_obstacle.get_sdf(points_base)
+        index = np.where(sdf < 0)[0]
+        if len(index) > 0:
+            points_base = points_base[index, :]
+            points_base_all = np.concatenate((points_base_all, points_base), axis=0)
+
+    vis.points(
+        points_base_all,
+        rgb = [1, 0, 0],
+        size=3,
+        )
+
     # robot trajectory
     # sample plan
     n = plan.shape[1]
     index = list(range(0, n, 10))
     if index[-1] != n - 1:
         index += [n - 1]
-    vis.robot_traj(robot, plan[:, index], base_position, alpha_spec={'style': 'A'})
-    for i in index:
-        q= plan[:, i]
-        points_base, _ = robot.compute_fk_surface_points(q)
-        points_world = points_base + np.array(base_position).reshape(1, 3)
-        vis.points(
-            points_world,
-            rgb = [1, 0, 0],
-            size=3,
-        )
+    vis.robot_traj(robot, plan[:, index], base_position, alpha_spec={'style': 'D'})
+
     vis.start()
 
 

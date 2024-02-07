@@ -1229,6 +1229,9 @@ class Visualizer:
             alpha_mid = alpha_spec.get("alpha_mid", 0.1)
             alpha_end = alpha_spec.get("alpha_end", 1.0)
             alphas = [alpha_start] + [alpha_mid] * (n - 2) + [alpha_end]
+        elif alpha_spec["style"] == "D":
+            alphas = np.ones(n) * 0.2
+            alphas = alphas.tolist()
 
         robot_traj = []
         if animate:
