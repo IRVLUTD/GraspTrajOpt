@@ -171,6 +171,7 @@ if __name__ == "__main__":
 
                 env.robot.execute_plan(plan)
                 env.robot.close_gripper()
+                env.record_gripper_position()
                 time.sleep(1.0)
 
                 # retrieve object

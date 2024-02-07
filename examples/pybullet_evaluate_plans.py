@@ -105,9 +105,11 @@ if __name__ == '__main__':
     total_success = 0
     object_success = {}
     object_count = {}
+    object_collision = {}
     for obj in env.ycb_object_names:
         object_success[obj] = 0
         object_count[obj] = 0
+        object_collision[obj] = 0
     total_collision = 0
 
     # main loop
@@ -156,16 +158,17 @@ if __name__ == '__main__':
                             in_collision = True
                             break
                 total_collision += int(in_collision)
+                object_collision[object_name] += int(in_collision)
                 print('--------------------------------')
                 print(f'{object_name}, success {reward}, collision {int(in_collision)}')
                 set_objects.remove(object_name)
                 env.reset_objects(object_name)
 
     # print output
-    print(f'-----------------{scene_type} scenes------------------')
+    print(f'-----------------{scene_type} scenes, {robot_name} robot------------------')
     count = 0
     for obj in env.ycb_object_names:
-        print(f'{obj}, success {object_success[obj]}, total {object_count[obj]}')
+        print(f'{obj}, total {object_count[obj]}, success {object_success[obj]}, collision {object_collision[obj]}')
         count += object_count[obj]
     print('-----------------------------------')
     print('total success', total_success)
