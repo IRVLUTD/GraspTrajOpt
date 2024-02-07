@@ -146,7 +146,7 @@ def visualize_plan(robot, gripper_model, base_position, plan, depth_pc, RT_grasp
     for i in index:
         q= plan[:, i]
         points_base, _ = robot.compute_fk_surface_points(q)
-        points_world = points_base + base_position.reshape(1, 3)
+        points_world = points_base + np.array(base_position).reshape(1, 3)
         vis.points(
             points_world,
             rgb = [1, 0, 0],
