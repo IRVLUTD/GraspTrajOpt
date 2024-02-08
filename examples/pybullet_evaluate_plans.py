@@ -8,7 +8,7 @@ from utils import *
 import _init_paths
 from mesh_to_sdf.depth_point_cloud import DepthPointCloud
 from gto.gto_models import GTORobotModel
-from gto.utils import load_yaml, get_root_dir
+from gto.utils import *
     
 
 
