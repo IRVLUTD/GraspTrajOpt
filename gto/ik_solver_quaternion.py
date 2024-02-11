@@ -33,7 +33,7 @@ class IKSolver:
 
         # setup parameters
         # tf goal is for link_ee
-        tf_goal = builder.add_parameter("tf_goal", 4, 4)
+        tf_goal = builder.add_parameter("tf_goal", 7)
         # sdf field
         if self.collision_avoidance:
             sdf_cost_obstacle = builder.add_parameter("sdf_cost_obstacle", self.robot.field_size)
@@ -45,13 +45,14 @@ class IKSolver:
 
         # forward kinematics for link_ee
         self.fk = self.robot.get_global_link_transform_function(link=self.link_ee)
+        self.fk_quat = self.robot.get_global_link_quaternion_function(link=self.link_ee)
 
         # Setting optimization - cost term and constraints
-        tf = self.fk(q_T) @ self.gripper_tf(q_T)
-        points_tf = tf[:3, :3] @ self.gripper_points.T + tf[:3, 3].reshape((3, 1))
-        tf_gripper_goal = tf_goal @ self.gripper_tf(q_T)
-        points_tf_goal = tf_gripper_goal[:3, :3] @ self.gripper_points.T + tf_gripper_goal[:3, 3].reshape((3, 1))
-        builder.add_cost_term("cost_pos", optas.sumsqr(points_tf - points_tf_goal))
+        tf = self.fk(q_T) 
+        quat = self.fk_quat(q_T)
+        cost_trans = optas.sumsqr(tf[:3, 3] - tf_goal[:3])
+        cost_quat = 1 - cs.dot(quat,tf_goal[3:]) * cs.dot(quat,tf_goal[3:])
+        builder.add_cost_term("cost_pos", cost_trans + cost_quat)
 
         # obstacle avoidance
         if self.collision_avoidance:
@@ -77,15 +78,19 @@ class IKSolver:
 
 
     def solve_ik(self, q_0, RT, sdf_cost_obstacle, base_position):
+        tf_goal = np.zeros(7)
+        tf_goal[:3] = RT[:3, 3]
+        w, x, y, z = mat2quat(RT[:3, :3])
+        tf_goal[3:] = [x, y, z, w]
         self.solver.reset_initial_seed({f"{self.robot_name}/q/x": self.robot.extract_optimized_dimensions(q_0)})
         if self.collision_avoidance:
             self.solver.reset_parameters({f"{self.robot_name}/q/p": self.robot.extract_parameter_dimensions(q_0),
                                         "sdf_cost_obstacle": optas.DM(sdf_cost_obstacle),
                                         "base_position": optas.DM(base_position),
-                                        "tf_goal": RT})
+                                        "tf_goal": optas.DM(tf_goal)})
         else:
             self.solver.reset_parameters({f"{self.robot_name}/q/p": self.robot.extract_parameter_dimensions(q_0),
-                                        "tf_goal": RT})                   
+                                        "tf_goal": optas.DM(tf_goal)})                   
         solution = self.solver.solve()
         q = solution[f"{self.robot_name}/q"]
 
@@ -206,6 +211,6 @@ if __name__ == "__main__":
         base_orientation=[0, 0, 0],
         euler_degrees=True,
         q=q_solution,
-        alpha=0.1,
+        alpha=0.8,
     )
     vis.start()
