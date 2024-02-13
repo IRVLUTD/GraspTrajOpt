@@ -151,7 +151,7 @@ if __name__ == '__main__':
                     plan_standoff = plan[:, np.arange(standoff_offset - 10, -1)]
                     plan_reverse = plan_standoff[:, ::-1]
                     plan_reverse[cfg['finger_index'], :] = 0
-                    env.robot.execute_plan(plan_reverse, video_writer)
+                    env.execute_plan(plan_reverse, video_writer)
                 
                 # retract robot
                 set_objects.remove(object_name)

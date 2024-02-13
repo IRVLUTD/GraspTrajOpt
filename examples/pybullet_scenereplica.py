@@ -112,10 +112,16 @@ class SceneReplicaEnv():
 
         # set camera for recording propurse
         # Set the camera settings.
-        look = [0.8, 0, 0.8]   
-        distance = 1.8
-        pitch = -45.0   
-        yaw = 90
+        if self.scene_type == 'tabletop':
+            look = [0.8, 0, 0.8]   
+            distance = 1.8
+            pitch = -45.0   
+            yaw = 90
+        else:
+            look = [0.45, 0, 1.0]   
+            distance = 1.6
+            pitch = -25.0   
+            yaw = -45.0
         roll = 0
         fov = 60.0
         self._view_matrix = p.computeViewMatrixFromYawPitchRoll(
