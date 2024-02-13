@@ -79,7 +79,10 @@ class SceneReplicaEnv():
             self.cid = p.connect(p.SHARED_MEMORY)
             if (self.cid < 0):
                 self.cid = p.connect(p.GUI)
-            p.resetDebugVisualizerCamera(2.0, -45.0, -41.0, [0.45, 0, 0.45])
+            if self.scene_type == 'shelf':
+                p.resetDebugVisualizerCamera(2.0, -45.0, -41.0, [0.45, 0, 0.45])
+            else:
+                p.resetDebugVisualizerCamera(1.8, 90.0, -45.0, [0.8, 0, 0.8])
         else:
             self.cid = p.connect(p.DIRECT)
 
@@ -107,6 +110,24 @@ class SceneReplicaEnv():
         p.setGravity(0, 0, -9.81)
         p.stepSimulation()
 
+        # set camera for recording propurse
+        # Set the camera settings.
+        look = [0.8, 0, 0.8]   
+        distance = 1.8
+        pitch = -45.0   
+        yaw = 90
+        roll = 0
+        fov = 60.0
+        self._view_matrix = p.computeViewMatrixFromYawPitchRoll(
+            look, distance, yaw, pitch, roll, 2
+        )
+        aspect = float(self._window_width) / self._window_height
+        self.near = 0.1
+        self.far = 10
+        self._proj_matrix = p.computeProjectionMatrixFOV(
+            fov, aspect, self.near, self.far
+        )                
+
         # set robot
         if robot_name == 'fetch':
             base_position = np.zeros((3, ))
@@ -121,11 +142,14 @@ class SceneReplicaEnv():
         self.light_position = np.array([-1.0, 0, 2.5])
         if self.scene_type == 'tabletop':
             table_file = os.path.join(self.root_dir, '../data/objects/cafe_table/cafe_table.urdf')
+            texture_file = os.path.join(self.root_dir, '../data/objects/cafe_table/materials/textures/Maple.jpg')
+            texture_id = p.loadTexture(texture_file)
             self.obj_path = [plane_file, table_file]
             # z_offset = -0.03  # difference between Real World and table CAD model
             z_offset = 0
             self.table_or_shelf_pos = np.array([0.8, 0, z_offset])
             self.table_id = p.loadURDF(table_file, self.table_or_shelf_pos)
+            p.changeVisualShape(self.table_id, -1, textureUniqueId=texture_id)
             self.table_height = 0.75
             p.changeDynamics(
                 self.table_id,
@@ -437,6 +461,33 @@ class SceneReplicaEnv():
             p.stepSimulation()
 
 
+    def execute_plan(self, plan, video_writer=None):
+        '''
+        @ param plan: shape (ndof, T)
+        '''        
+        for t in range(plan.shape[1]):
+            self.robot.cmd(plan[:, t])
+            if t >= plan.shape[1] - 5:
+                num = 500
+            else:
+                num = 200
+            for _ in range(num):
+                p.stepSimulation()
+
+            if video_writer is not None:
+                _, _, rgba, depth, mask = p.getCameraImage(
+                    width=self._window_width,
+                    height=self._window_height,
+                    viewMatrix=self._view_matrix,
+                    projectionMatrix=self._proj_matrix,
+                    physicsClientId=self.cid,
+                )
+                video_writer.write(rgba[:, :, [2, 1, 0]].astype(np.uint8))
+                # fig = plt.figure()
+                # plt.imshow(rgba[:, :, :3])
+                # plt.show()
+
+
     def compute_reward(self, object_name):
         """Calculates the reward for the episode.
 
@@ -460,7 +511,7 @@ class SceneReplicaEnv():
         self.recorded_gripper_position = pos
 
 
-    def retract(self, retract_distance=0.3):
+    def retract(self, retract_distance=0.3, video_writer=None):
         """Retract step."""
         qc = self.robot.q()
         # keep gripper closed
@@ -477,6 +528,16 @@ class SceneReplicaEnv():
             for idx in self.robot.finger_index:
                 jointPoses[idx] = 0.0
             self.step(jointPoses.tolist())
+
+            if video_writer is not None:
+                _, _, rgba, depth, mask = p.getCameraImage(
+                    width=self._window_width,
+                    height=self._window_height,
+                    viewMatrix=self._view_matrix,
+                    projectionMatrix=self._proj_matrix,
+                    physicsClientId=self.cid,
+                )
+                video_writer.write(rgba[:, :, [2, 1, 0]].astype(np.uint8))            
     
 
 def load_grasps(data_dir, robot_name, model):
