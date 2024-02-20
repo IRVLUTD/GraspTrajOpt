@@ -106,6 +106,12 @@ if __name__ == '__main__':
     object_success = {}
     object_count = {}
     object_collision = {}
+    checking_time = 0
+    ik_time = 0
+    planning_time = 0
+    count_checking_time = 0
+    count_ik_time = 0
+    count_planning_time = 0    
     for obj in env.ycb_object_names:
         object_success[obj] = 0
         object_count[obj] = 0
@@ -133,6 +139,21 @@ if __name__ == '__main__':
                 total_success += reward
                 object_success[object_name] += reward
                 object_count[object_name] += 1
+
+                # time
+                if 'checking_time' in results[object_name].keys():
+                    time = results[object_name]['checking_time']
+                    if time is not None:
+                        checking_time += time
+                        count_checking_time += 1
+                time = results[object_name]['ik_time']
+                if time is not None:
+                    ik_time += time
+                    count_ik_time += 1
+                time = results[object_name]['planning_time']
+                if time is not None:
+                    planning_time += time
+                    count_planning_time += 1
                 
                 # reset scene
                 env.reset_scene(set_objects)
@@ -174,3 +195,15 @@ if __name__ == '__main__':
     print('total success', total_success)
     print('total collision', total_collision)
     print('total trial', count)
+
+    total_time = 0
+    if count_checking_time > 0:
+        print('checking time', checking_time / count_checking_time)
+        total_time += checking_time / count_checking_time
+    if count_ik_time > 0:
+        print('ik time', ik_time / count_ik_time)
+        total_time += ik_time / count_ik_time
+    if count_planning_time > 0:
+        print('planing time', planning_time / count_planning_time)
+        total_time += planning_time / count_planning_time
+    print('total time', total_time)
