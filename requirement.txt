@@ -8,9 +8,11 @@ xacro
 vtk
 pyyaml
 
-trimesh
+trimesh==4.1.0
 pyopengl
 pyrender
 scikit-image
 scikit-learn
 open3d
+pybullet
+transforms3d

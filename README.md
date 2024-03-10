@@ -1,23 +1,39 @@
 # GraspTrajOpt
-Trajectory optimization for grasping
+Grasping Trajectory Optimization with Point Clouds
 
-### Installation
+We introduce a new trajectory optimization method for robotic grasping based on a point-cloud representation of robots and task spaces. In our method, robots are represented by 3D points on their link surfaces. The task space of a robot is represented by a point cloud that can be obtained from depth sensors. Using the point-cloud representation, goal reaching in grasping can be formulated as point matching, while collision avoidance can be efficiently achieved by querying the signed distance values of the robot points in the signed distance field of the scene points. Consequently, a constrained non-linear optimization problem is formulated to solve the joint motion and grasp planning problem. The advantage of our method is that the point-cloud representation is general to be used with any robot in any environment. We demonstrate the effectiveness of our method by conducting experiments on a tabletop scene and a shelf scene for grasping with a Fetch mobile manipulator and a Franka Panda arm.
 
-1. Install python packages
-   ```Shell
-   pip install -r requirement.txt
-   ```
+[![Watch the video](https://img.youtube.com/vi/D-ocFqsryBQ/default.jpg)](https://youtu.be/D-ocFqsryBQ)
 
+## Installation
+```sh
+# create conda environment
+conda create -n gto python=3.9
 
-# Note
-- If joint limits are not presented in the urdf file, urdf_parser_py.urdf will set the joint limits to 0s. Make sure every joint has limits in the urdf file.
+# activate the environment
+conda activate gto
+
+# install dependencies
+pip install -r requirement.txt
+```
 
 ## Example Usage
   
-1. Run GTO planning with SceneReplica in PyBullet:
+1. Download the SceneReplica data from [here](https://utdallas.box.com/s/nsrkk2o27a9sb8jnd8xqq0a7bk2srsa8). Unzip it to the root directory of this project.
+
+2. Run GTO planning with SceneReplica in PyBullet:
    ```Shell
    cd examples/
-   python pybullet_gto_planning.py
+   python pybullet_gto_planning.py --robot panda --scene_type tabletop --data_dir ../scenereplica_data
    ```
+   The command line args:
+- `--robot` : From {"fetch", "panda"}
+- `--scene_type` : From {"tabletop", "shelf"}
+- `--data_dir` : The path for the SceneReplica data directory
 
-![](./pics/example.png)
+<p align="center" width="100%">
+   <img src="./pics/example.png" alt="drawing" width="1200"/>
+</p>
+
+## Note for adding a new robot
+- If joint limits are not presented in the urdf file, urdf_parser_py.urdf will set the joint limits to 0s. Make sure every joint has limits in the urdf file.
