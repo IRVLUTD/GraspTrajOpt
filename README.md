@@ -3,7 +3,11 @@ Grasping Trajectory Optimization with Point Clouds
 
 We introduce a new trajectory optimization method for robotic grasping based on a point-cloud representation of robots and task spaces. In our method, robots are represented by 3D points on their link surfaces. The task space of a robot is represented by a point cloud that can be obtained from depth sensors. Using the point-cloud representation, goal reaching in grasping can be formulated as point matching, while collision avoidance can be efficiently achieved by querying the signed distance values of the robot points in the signed distance field of the scene points. Consequently, a constrained non-linear optimization problem is formulated to solve the joint motion and grasp planning problem. The advantage of our method is that the point-cloud representation is general to be used with any robot in any environment. We demonstrate the effectiveness of our method by conducting experiments on a tabletop scene and a shelf scene for grasping with a Fetch mobile manipulator and a Franka Panda arm.
 
-[![Watch the video](https://img.youtube.com/vi/D-ocFqsryBQ/default.jpg)](https://youtu.be/D-ocFqsryBQ)
+<p align="center" width="100%">
+   <video width="640" height="320" controls>
+   <source src="./pics/GTO.mp4" type="video/mp4">
+   </video>
+</p>
 
 ## Installation
 ```sh
@@ -34,6 +38,16 @@ pip install -r requirement.txt
 <p align="center" width="100%">
    <img src="./pics/example.png" alt="drawing" width="1200"/>
 </p>
+
+##  Running with Real Robots
+We provide some examples of using the planner with a Fetch robot for the SceneReplica benchmark:
+[https://github.com/IRVLUTD/SceneReplica/tree/gto_planning](https://github.com/IRVLUTD/SceneReplica/tree/gto_planning)
+
+1. Model-based grasping: [https://github.com/IRVLUTD/SceneReplica/blob/gto_planning/src/bench_model_based_grasping_gto.py](https://github.com/IRVLUTD/SceneReplica/blob/gto_planning/src/bench_model_based_grasping_gto.py)
+
+2. Model-free grapsing: [https://github.com/IRVLUTD/SceneReplica/blob/gto_planning/src/bench_6dof_segmentation_grasping_gto.py](https://github.com/IRVLUTD/SceneReplica/blob/gto_planning/src/bench_6dof_segmentation_grasping_gto.py)
+
+3. The shelf grasping experiment is conducted with [https://github.com/IRVLUTD/SceneReplica/blob/gto_planning/src/model_free_grasping_gto.py](https://github.com/IRVLUTD/SceneReplica/blob/gto_planning/src/model_free_grasping_gto.py)
 
 ## Note for adding a new robot
 - If joint limits are not presented in the urdf file, urdf_parser_py.urdf will set the joint limits to 0s. Make sure every joint has limits in the urdf file.
