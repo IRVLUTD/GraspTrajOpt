@@ -154,9 +154,9 @@ class VisualBox:
         )
 
 class FixedBaseRobot:
-    def __init__(self, urdf_filename, base_position=[0.0] * 3):
+    def __init__(self, urdf_filename, base_position=[0.0] * 3, fix_base=1):
         self._id = p.loadURDF(
-            fileName=urdf_filename, useFixedBase=1, basePosition=base_position
+            fileName=urdf_filename, useFixedBase=fix_base, basePosition=base_position
         )
         self.num_joints = p.getNumJoints(self._id)
         self._actuated_joints = []
@@ -168,6 +168,8 @@ class FixedBaseRobot:
                 self._actuated_joints.append(j)
                 self._actuated_joint_names.append(info[1])
         self.ndof = len(self._actuated_joints)
+        print('robot ndof', self.ndof)
+        print(self._actuated_joint_names)
         self.robot = optas.RobotModel(urdf_filename, time_derivs=[0])
 
         self.position_control_gain_p = [0.01] * self.ndof
@@ -294,15 +296,17 @@ class Panda(FixedBaseRobot):
     
 
 class Fetch(FixedBaseRobot):
-    def __init__(self, base_position=[0.0] * 3, scene_type='tabletop'):
-        f = os.path.join(cwd, "../data/robots", "fetch", "fetch.urdf")
+    def __init__(self, base_position=[0.0] * 3, scene_type='tabletop', fix_base=1):
+        f = os.path.join(cwd, "../data/robots", "fetch_igibson", "fetch_gripper.urdf")
         self.urdf_filename = f
-        super().__init__(f, base_position=base_position)
+        super().__init__(f, base_position=base_position, fix_base=fix_base)
         self.ee_index = 16
         self.camera_link_index = 7
         self.gripper_open_joints = [0.05, 0.05]
         self.finger_index = [12, 13]
-        self.scene_type = scene_type
+        self.wheels = [1, 2]
+        self.scene_type = scene_type               
+        
 
     def default_pose(self):
         # set robot pose
@@ -331,6 +335,16 @@ class Fetch(FixedBaseRobot):
         joint_command[12] = 0.05
         joint_command[13] = 0.05        
         return joint_command
+    
+
+    def cmd_wheel_velocities(self, velocities):
+        for i, wheel in enumerate(self.wheels):
+            p.setJointMotorControl2(self._id,
+                            wheel,
+                            p.VELOCITY_CONTROL,
+                            targetVelocity=velocities[i],
+                            force=5)
+
     
     def get_camera_pose(self):
         pos, orn = p.getLinkState(self._id, self.camera_link_index)[:2]
@@ -416,7 +430,8 @@ def main(gui=True):
     # robot = KukaLBR()
     # robot = R2D2([0, 0, 0.5])
     # robot = Nextage()
-    robot = Fetch()
+    robot = Fetch(fix_base=False)
+    robot.retract()
 
     q0 = np.zeros(robot.ndof)
     qF = np.random.uniform(-np.pi, np.pi, size=(robot.ndof,))
@@ -424,6 +439,9 @@ def main(gui=True):
     alpha = 0.0
 
     pb.start()
+    while 1:
+        robot.cmd_wheel_velocities(velocities=[1, 1])
+        time.sleep(0.01)
 
     while alpha < 1.0:
         q = (1.0 - alpha) * q0 + alpha * qF
