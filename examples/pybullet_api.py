@@ -7,6 +7,8 @@ import pybullet as p
 import pybullet_data
 import numpy as np
 from utils import *
+from move_to_pose import angle_mod, PathFinderController
+
 
 cwd = pathlib.Path(__file__).parent.resolve()  # path to current working directory
 
@@ -44,10 +46,10 @@ class PyBullet:
         self,
         dt,
         add_floor=True,
-        camera_distance=1.5,
+        camera_distance=2.5,
         camera_yaw=45,
         camera_pitch=-40,
-        camera_target_position=[0, 0, 0.5],
+        camera_target_position=[1.0, 0, 0.5],
         record_video=False,
         gui=True,
     ):
@@ -245,7 +247,7 @@ class FixedBaseRobot:
             pose_standoff[2, 3] = offset
         else:
             print('unknow standoff axis', axis)
-        return pose_standoff                   
+        return pose_standoff         
 
 
 class Panda(FixedBaseRobot):
@@ -305,7 +307,20 @@ class Fetch(FixedBaseRobot):
         self.gripper_open_joints = [0.05, 0.05]
         self.finger_index = [12, 13]
         self.wheels = [1, 2]
-        self.scene_type = scene_type               
+        self.scene_type = scene_type
+        self.path_controller = PathFinderController(9, 15, 3)
+        self.MAX_LINEAR_SPEED = 0.1
+        self.MAX_ANGULAR_SPEED = 0.1
+        self.wheel_axle_halflength = self.wheel_axle_length / 2.0
+
+
+    @property
+    def wheel_radius(self):
+        return 0.0613
+
+    @property
+    def wheel_axle_length(self):
+        return 0.372                 
         
 
     def default_pose(self):
@@ -335,6 +350,79 @@ class Fetch(FixedBaseRobot):
         joint_command[12] = 0.05
         joint_command[13] = 0.05        
         return joint_command
+    
+
+    def get_base_pose(self):
+        pos, orn = p.getBasePositionAndOrientation(self._id)
+        euler = p.getEulerFromQuaternion(orn)
+        yaw = euler[2]
+        return pos[0], pos[1], yaw
+    
+
+    def move_to_pose(self, x_delta, y_delta, theta_delta):
+        # global pose
+        x, y, theta = self.get_base_pose()
+        x_goal = x + x_delta
+        y_goal = y + y_delta
+        theta_goal = theta + theta_delta
+
+        x_diff = x_goal - x
+        y_diff = y_goal - y
+
+        x_traj, y_traj = [], []
+        dt = 0.01
+
+        rho = np.hypot(x_diff, y_diff)
+        beta = angle_mod(theta_goal - theta)
+        while rho > 0.01 or beta > 0.01:
+            x_traj.append(x)
+            y_traj.append(y)
+
+            x_diff = x_goal - x
+            y_diff = y_goal - y
+
+            rho, v, w = self.path_controller.calc_control_command(
+                x_diff, y_diff, theta, theta_goal)
+
+            if abs(v) > self.MAX_LINEAR_SPEED:
+                v = np.sign(v) * self.MAX_LINEAR_SPEED
+
+            if abs(w) > self.MAX_ANGULAR_SPEED:
+                w = np.sign(w) * self.MAX_ANGULAR_SPEED
+
+            # send command to robot
+            right_wheel_joint_vel, left_wheel_joint_vel = self.command_to_control([v, w])
+            self.cmd_wheel_velocities([right_wheel_joint_vel, left_wheel_joint_vel])
+            time.sleep(dt)
+
+            # get pose
+            x, y, theta = self.get_base_pose()
+            beta = angle_mod(theta_goal - theta)
+        self.cmd_wheel_velocities([0, 0])
+
+
+    def command_to_control(self, command):
+        """
+        Converts the (already preprocessed) inputted @command into deployable (non-clipped!) joint control signal.
+        This processes converts the desired (lin_vel, ang_vel) command into (left, right) wheel joint velocity control
+        signals.
+
+        :param command: Array[float], desired (already preprocessed) 2D command to convert into control signals
+            Consists of desired (lin_vel, ang_vel) of the controlled body
+        :param control_dict: Dict[str, Any], dictionary that should include any relevant keyword-mapped
+            states necessary for controller computation. Must include the following keys:
+
+        :return: Array[float], outputted (non-clipped!) velocity control signal to deploy
+            to the [left, right] wheel joints
+        """
+        lin_vel, ang_vel = command
+
+        # Convert to wheel velocities
+        left_wheel_joint_vel = (lin_vel - ang_vel * self.wheel_axle_halflength) / self.wheel_radius
+        right_wheel_joint_vel = (lin_vel + ang_vel * self.wheel_axle_halflength) / self.wheel_radius
+
+        # Return desired velocities
+        return np.array([right_wheel_joint_vel, left_wheel_joint_vel])    
     
 
     def cmd_wheel_velocities(self, velocities):
@@ -439,9 +527,8 @@ def main(gui=True):
     alpha = 0.0
 
     pb.start()
-    while 1:
-        robot.cmd_wheel_velocities(velocities=[1, 1])
-        time.sleep(0.01)
+    robot.move_to_pose(x_delta=1.0, y_delta=0, theta_delta=90*np.pi/180)
+    input('next?')
 
     while alpha < 1.0:
         q = (1.0 - alpha) * q0 + alpha * qF
