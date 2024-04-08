@@ -76,6 +76,7 @@ class PyBullet:
         )
         if add_floor:
             self.add_floor()
+        pybullet_show_frame(np.eye(4))
 
     def add_floor(self, base_position=[0.0] * 3):
         colid = p.createCollisionShape(p.GEOM_PLANE)
@@ -308,9 +309,9 @@ class Fetch(FixedBaseRobot):
         self.finger_index = [12, 13]
         self.wheels = [1, 2]
         self.scene_type = scene_type
-        self.path_controller = PathFinderController(9, 15, 3)
-        self.MAX_LINEAR_SPEED = 0.1
-        self.MAX_ANGULAR_SPEED = 0.1
+        self.path_controller = PathFinderController(1, 1, 1)
+        self.MAX_LINEAR_SPEED = 0.2
+        self.MAX_ANGULAR_SPEED = 0.2
         self.wheel_axle_halflength = self.wheel_axle_length / 2.0
 
 
@@ -359,12 +360,11 @@ class Fetch(FixedBaseRobot):
         return pos[0], pos[1], yaw
     
 
-    def move_to_pose(self, x_delta, y_delta, theta_delta):
+    def move_to_xy(self, x_delta, y_delta):
         # global pose
         x, y, theta = self.get_base_pose()
         x_goal = x + x_delta
         y_goal = y + y_delta
-        theta_goal = theta + theta_delta
 
         x_diff = x_goal - x
         y_diff = y_goal - y
@@ -373,16 +373,40 @@ class Fetch(FixedBaseRobot):
         dt = 0.01
 
         rho = np.hypot(x_diff, y_diff)
-        beta = angle_mod(theta_goal - theta)
-        while rho > 0.01 or beta > 0.01:
+        while rho > 0.001:
             x_traj.append(x)
             y_traj.append(y)
 
             x_diff = x_goal - x
             y_diff = y_goal - y
 
-            rho, v, w = self.path_controller.calc_control_command(
-                x_diff, y_diff, theta, theta_goal)
+            rho, v, w = self.path_controller.calc_control_xy(
+                x_diff, y_diff, theta)
+
+            if abs(v) > self.MAX_LINEAR_SPEED:
+                v = np.sign(v) * self.MAX_LINEAR_SPEED
+
+            if abs(w) > self.MAX_ANGULAR_SPEED:
+                w = np.sign(w) * self.MAX_ANGULAR_SPEED
+
+            # send command to robot
+            right_wheel_joint_vel, left_wheel_joint_vel = self.command_to_control([v, w])
+            self.cmd_wheel_velocities([right_wheel_joint_vel, left_wheel_joint_vel])
+            time.sleep(dt)
+
+            # get pose
+            x, y, theta = self.get_base_pose()
+        self.cmd_wheel_velocities([0, 0])
+
+
+    def move_to_theta(self, theta_delta):
+        # global pose
+        x, y, theta = self.get_base_pose()
+        theta_goal = theta + theta_delta
+        dt = 0.01
+        beta = angle_mod(theta_goal - theta)
+        while beta > 0.01:
+            v, w = self.path_controller.calc_control_theta(theta, theta_goal)
 
             if abs(v) > self.MAX_LINEAR_SPEED:
                 v = np.sign(v) * self.MAX_LINEAR_SPEED
@@ -398,7 +422,7 @@ class Fetch(FixedBaseRobot):
             # get pose
             x, y, theta = self.get_base_pose()
             beta = angle_mod(theta_goal - theta)
-        self.cmd_wheel_velocities([0, 0])
+        self.cmd_wheel_velocities([0, 0])        
 
 
     def command_to_control(self, command):
@@ -527,7 +551,8 @@ def main(gui=True):
     alpha = 0.0
 
     pb.start()
-    robot.move_to_pose(x_delta=1.0, y_delta=0, theta_delta=90*np.pi/180)
+    robot.move_to_xy(x_delta=1.0, y_delta=2.0)
+    robot.move_to_theta(90*np.pi / 180)
     input('next?')
 
     while alpha < 1.0:

@@ -95,6 +95,24 @@ class PathFinderController:
         self.Kp_alpha = Kp_alpha
         self.Kp_beta = Kp_beta
 
+
+    def calc_control_xy(self, x_diff, y_diff, theta):
+        rho = np.hypot(x_diff, y_diff)
+        alpha = angle_mod(np.arctan2(y_diff, x_diff) - theta)
+        v = self.Kp_rho * rho
+        w = self.Kp_alpha * alpha
+        if alpha > np.pi / 2 or alpha < -np.pi / 2:
+            v = -v
+        return rho, v, w
+    
+
+    def calc_control_theta(self, theta, theta_goal):
+        beta = angle_mod(theta_goal - theta)
+        v = 0
+        w = self.Kp_beta * beta
+        return v, w    
+
+
     def calc_control_command(self, x_diff, y_diff, theta, theta_goal):
         """
         Returns the control command for the linear and angular velocities as
@@ -133,8 +151,9 @@ class PathFinderController:
         rho = np.hypot(x_diff, y_diff)
         alpha = angle_mod(np.arctan2(y_diff, x_diff) - theta)
         beta = angle_mod(theta_goal - theta - alpha)
+        print('rho', rho, 'alpha', alpha, 'beta', beta)
         v = self.Kp_rho * rho
-        w = self.Kp_alpha * alpha - controller.Kp_beta * beta
+        w = self.Kp_alpha * alpha - self.Kp_beta * beta
 
         if alpha > np.pi / 2 or alpha < -np.pi / 2:
             v = -v
