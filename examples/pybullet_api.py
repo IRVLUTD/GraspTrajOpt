@@ -178,6 +178,7 @@ class FixedBaseRobot:
         self.position_control_gain_p = [0.01] * self.ndof
         self.position_control_gain_d = [1.0] * self.ndof
         self.max_torque = [1000] * self.ndof
+        self.wheels = []
 
     def reset(self, q):
         for j, idx in enumerate(self._actuated_joints):
@@ -193,7 +194,14 @@ class FixedBaseRobot:
             forces=self.max_torque,
             positionGains=self.position_control_gain_p,
             velocityGains=self.position_control_gain_d,
-        )     
+        )
+        for wheel in self.wheels:
+            p.setJointMotorControl2(self._id,
+                            wheel,
+                            p.VELOCITY_CONTROL,
+                            targetVelocity=0,
+                            force=0)        
+        
 
     def cmd_torque(self, taus):
         for index in range(len(self._actuated_joints)):
@@ -371,7 +379,7 @@ class Fetch(FixedBaseRobot):
         dt = 0.01
 
         rho = np.hypot(x_diff, y_diff)
-        while rho > 0.001:
+        while rho > 0.01:
             x_traj.append(x)
             y_traj.append(y)
 
@@ -386,6 +394,7 @@ class Fetch(FixedBaseRobot):
 
             if abs(w) > self.MAX_ANGULAR_SPEED:
                 w = np.sign(w) * self.MAX_ANGULAR_SPEED
+            print('linear velocity', v, 'angular velocity', w)
 
             # send command to robot
             right_wheel_joint_vel, left_wheel_joint_vel = self.command_to_control([v, w])

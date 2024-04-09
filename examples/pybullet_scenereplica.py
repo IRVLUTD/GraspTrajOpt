@@ -70,7 +70,7 @@ class SceneReplicaEnv():
             "040_large_marker",
             "052_extra_large_clamp",
         )
-        self.reset(urdf_filename, robot_name, base_position)
+        self.reset(urdf_filename, robot_name, base_position, mobile)
 
 
     def connect(self):
@@ -103,7 +103,7 @@ class SceneReplicaEnv():
         p.setRealTimeSimulation(0)        
 
 
-    def reset(self, urdf_filename, robot_name, base_position):
+    def reset(self, urdf_filename, robot_name, base_position, mobile):
 
         p.resetSimulation()
         p.setTimeStep(self._timeStep)
@@ -136,17 +136,19 @@ class SceneReplicaEnv():
             fov, aspect, self.near, self.far
         )                
 
-        # set robot
-        if 'fetch' in robot_name:
-            self.robot = Fetch(urdf_filename, base_position, self.scene_type)
-        elif robot_name == 'panda':
-            self.robot = Panda(urdf_filename, base_position, self.scene_type)        
-        self.robot.retract()    
-
-        # Set table and plane
+        # Set plane
         plane_file = os.path.join(self.root_dir, '../data/objects/floor/model_normalized.urdf') # _white
         self.plane_id = p.loadURDF(plane_file, [0, 0, 0])
         self.light_position = np.array([-1.0, 0, 2.5])
+
+        # set robot
+        if 'fetch' in robot_name:
+            self.robot = Fetch(urdf_filename, base_position, self.scene_type, fix_base=not mobile)
+        elif robot_name == 'panda':
+            self.robot = Panda(urdf_filename, base_position, self.scene_type, fix_base=not mobile)        
+        self.robot.retract()
+
+        # Set table
         if self.scene_type == 'tabletop':
             table_file = os.path.join(self.root_dir, '../data/objects/cafe_table/cafe_table.urdf')
             texture_file = os.path.join(self.root_dir, '../data/objects/cafe_table/materials/textures/Maple.jpg')
@@ -189,7 +191,7 @@ class SceneReplicaEnv():
         self.object_uids = []
         self.object_names = []
         self.cache_object_poses = []
-        self.cache_objects()     
+        self.cache_objects()
 
 
     def cache_objects(self):
@@ -364,7 +366,11 @@ class SceneReplicaEnv():
 
     def set_object_pose(self, name, pos, orn):
         idx = self.object_uids[self.object_names.index(name)]
-        p.resetBasePositionAndOrientation(idx, pos, orn)        
+        p.resetBasePositionAndOrientation(idx, pos, orn)
+
+
+    def get_robot_pose(self):
+        return p.getBasePositionAndOrientation(self.robot._id)              
 
 
     def get_camera_view(self):
@@ -616,10 +622,13 @@ if __name__ == '__main__':
     data_dir = args.data_dir
     scene_id = args.scene_id
     scene_type = args.scene_type
+    urdf_filename = '../data/robots/fetch/fetch.urdf'
 
     # create the table environment
-    env = SceneReplicaEnv(data_dir, robot_name, scene_type, mobile=False)
+    env = SceneReplicaEnv(urdf_filename, data_dir, robot_name, scene_type, mobile=True)
     for scene_id in [36, 84, 68, 10, 77, 148, 48, 25, 104, 38, 27, 122, 141, 65, 39, 83, 130, 161, 33, 56]:
+        env.start()
+        env.robot.move_to_xy(x_delta=2.0, y_delta=0.0)
         env.setup_scene(scene_id)
         rgba, depth, mask, cam_pose, intrinsic_matrix = env.get_observation()
         input('next scene?')
