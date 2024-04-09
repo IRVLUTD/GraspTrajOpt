@@ -319,6 +319,8 @@ class SceneReplicaEnv():
             if name not in names:
                 position, orientation = self.cache_object_poses[i]
                 self.set_object_pose(name, position, orientation)
+        # set robot
+        self.set_robot_pose(self.base_position, orn=[0, 0, 0, 1])
         # start simulation
         self.start()
         time.sleep(2.0)
@@ -370,7 +372,11 @@ class SceneReplicaEnv():
 
 
     def get_robot_pose(self):
-        return p.getBasePositionAndOrientation(self.robot._id)              
+        return p.getBasePositionAndOrientation(self.robot._id)
+    
+
+    def set_robot_pose(self, pos, orn):
+        p.resetBasePositionAndOrientation(self.robot._id, pos, orn)               
 
 
     def get_camera_view(self):

@@ -72,6 +72,7 @@ def interpolate_waypoints(waypoints, n, m, mode="cubic"):  # linear
 
 def debug_plan(robot, gripper_model, base_position, plan, depth_pc, sdf_cost, RT_grasps_world, show_grasp=True):
     T = plan.shape[1]
+    base_position = np.array(base_position)
     for i in range(30, T):
         q = plan[:, i]
         points_base, _ = robot.compute_fk_surface_points(q)
@@ -114,7 +115,7 @@ def debug_plan(robot, gripper_model, base_position, plan, depth_pc, sdf_cost, RT
         vis.start()  
 
 
-def visualize_plan(robot, gripper_model, base_position, plan, depth_pc, depth_pc_obstacle, RT_grasps_world):
+def visualize_plan(robot, gripper_model, base_position, plan, depth_pc_obstacle, RT_grasps_world):
     # visualize grasps
     vis = Visualizer(camera_position=[-1, 3.0, 5.0])
     vis.grid_floor()

@@ -149,12 +149,14 @@ if __name__ == '__main__':
     else:
         all_scene_ids = [scene_id]
     for scene_id in all_scene_ids:
-        print(f'=====================Scene {scene_id}========================')
-        meta = env.setup_scene(scene_id)
 
         # two orderings
         results_ordering = {}
         for ordering in orderings:
+
+            print(f'=====================Scene {scene_id}========================')
+            meta = env.setup_scene(scene_id)
+
             object_order = meta[ordering][0].split(",")
             print(ordering, object_order)
 
@@ -163,6 +165,7 @@ if __name__ == '__main__':
             env.robot.look_at(pan=0, tilt=10)
             env.get_observation()
             env.robot.move_to_xy(x_delta=2.0, y_delta=0.0)
+            env.robot.look_at(pan=0, tilt=50)       
             
             # for each object
             results = {}
@@ -181,6 +184,16 @@ if __name__ == '__main__':
                 rgba, depth, mask, cam_pose, intrinsic_matrix = env.get_observation()
                 idx = env.object_uids[env.object_names.index(object_name)]
                 target_mask = mask == idx
+
+                # get robot base pose
+                pos, orn = env.get_robot_pose()
+                RT_base = np.eye(4)
+                quat = [orn[3], orn[0], orn[1], orn[2]]   #w, x, y, z
+                RT_base[:3, :3] = quat2mat(quat)
+                RT_base[:3, 3] = pos     
+                                
+                # convert camera pose from world to base
+                cam_pose = np.linalg.inv(RT_base) @ cam_pose
                 depth_pc = DepthPointCloud(depth, intrinsic_matrix, cam_pose, target_mask=None, threshold=cfg['depth_threshold'])
                 robot.setup_points_field(depth_pc.points)
                 world_points = robot.workspace_points
@@ -198,7 +211,7 @@ if __name__ == '__main__':
                 # load grasps
                 RT_grasps = load_grasps(data_dir, robot_name, object_name)
 
-                # query object pose
+                # query object pose in world
                 pos, orn = env.get_object_pose(object_name)
                 obj_pose = list(pos) + [orn[3], orn[0], orn[1], orn[2]]
                 RT_obj = unpack_pose(obj_pose)
@@ -208,15 +221,15 @@ if __name__ == '__main__':
                 print('start checking collision of grasps')
                 start = time.time()
                 n = RT_grasps.shape[0]
-                RT_grasps_world = np.zeros_like(RT_grasps)
+                RT_grasps_base = np.zeros_like(RT_grasps)
                 in_collision = np.zeros((n, ), dtype=np.int32)
                 for i in range(n):
                     RT_g = RT_grasps[i]
                     RT = RT_obj @ RT_g
-                    RT_grasps_world[i] = RT
+                    RT_grasps_base[i] = np.linalg.inv(RT_base) @ RT
 
                     # check if the grasp is in collision
-                    RT_off = RT @ env.robot.get_standoff_pose(offset, cfg['axis_standoff'])
+                    RT_off = RT_grasps_base[i] @ env.robot.get_standoff_pose(offset, cfg['axis_standoff'])
                     gripper_points, normals = gripper_model.compute_fk_surface_points(cfg['gripper_open_offsets'], tf_base=RT_off)
                     sdf = depth_pc_obstacle.get_sdf(gripper_points)
 
@@ -226,6 +239,7 @@ if __name__ == '__main__':
                         in_collision[i] = 1
 
                     # visualization
+                    # import pyrender
                     # colors = np.zeros(gripper_points.shape)
                     # colors[sdf < 0, 2] = 1
                     # colors[sdf > 0, 0] = 1
@@ -235,11 +249,11 @@ if __name__ == '__main__':
                     # scene.add(pyrender.Mesh.from_points(depth_pc.points))
                     # pyrender.Viewer(scene, use_raymond_lighting=True, point_size=2)
                 
-                RT_grasps_world = RT_grasps_world[in_collision == 0]
+                RT_grasps_base = RT_grasps_base[in_collision == 0]
                 checking_time = time.time() - start
                 print('Checking grasp collision time', checking_time)
-                print('Among %d grasps, %d in collision, %d collision-free' % (n, np.sum(in_collision), RT_grasps_world.shape[0]))
-                if RT_grasps_world.shape[0] == 0:
+                print('Among %d grasps, %d in collision, %d collision-free' % (n, np.sum(in_collision), RT_grasps_base.shape[0]))
+                if RT_grasps_base.shape[0] == 0:
                     set_objects.remove(object_name)
                     results[object_name] = {'reward': 0, 'plan': None, 'checking_time': checking_time,
                                          'ik_time': None, 'planning_time': None}
@@ -249,42 +263,30 @@ if __name__ == '__main__':
                 print('start IK')
                 start = time.time()
                 ik_solver.setup_optimization()
-                n = RT_grasps_world.shape[0]
-                RT_grasps_base = RT_grasps_world.copy()
+                n = RT_grasps_base.shape[0]
                 found_ik = np.zeros((n, ), dtype=np.int32)
                 q0 = np.array(env.robot.q()).reshape((env.robot.ndof, 1))
                 q_solutions = np.zeros((robot.ndof, n), dtype=np.float32)
                 for i in range(n):
-                    RT = RT_grasps_world[i].copy()
-
-                    # change world to robot base
-                    pos, orn = env.get_robot_pose()
-                    RT_base = np.eye(4)
-                    quat = [orn[3], orn[0], orn[1], orn[2]]   #w, x, y, z
-                    RT_base[:3, :3] = quat2mat(quat)
-                    RT_base[:3, 3] = pos
-                    RT = np.linalg.inv(RT_base) @ RT
-
-                    RT_grasps_base[i] = RT.copy()
+                    RT = RT_grasps_base[i].copy()
                     if scene_type == 'shelf':
                         RT_off = RT @ env.robot.get_standoff_pose(standoff_distance, cfg['axis_standoff'])
                     else:
                         RT_off = RT
-                    q_solution, err_pos, err_rot, cost_collision = ik_solver.solve_ik(q0, RT_off, sdf_cost_obstacle, env.base_position)
+                    q_solution, err_pos, err_rot, cost_collision = ik_solver.solve_ik(q0, RT_off, sdf_cost_obstacle, base_position=[0, 0, 0])
                     q_solutions[:, i] = q_solution
                     if err_pos < 0.01 and err_rot < 5 and cost_collision < ik_collision_threshold:
                         found_ik[i] = 1
                         # if args.vis:
                         #     visualize_pose(robot, env.base_position, q_solution, depth_pc)
 
-                RT_grasps_world = RT_grasps_world[found_ik == 1] 
                 RT_grasps_base = RT_grasps_base[found_ik == 1]
                 q_solutions = q_solutions[:, found_ik == 1]
                 ik_time = time.time() - start
                 print('IK time', ik_time)
                 print('Among %d grasps, %d found IK' % (n, np.sum(found_ik)))
                 print('IK solutions with shape', q_solutions.shape)
-                if RT_grasps_world.shape[0] == 0:
+                if RT_grasps_base.shape[0] == 0:
                     set_objects.remove(object_name)
                     results[object_name] = {'reward': 0, 'plan': None, 'checking_time': checking_time,
                                          'ik_time': ik_time, 'planning_time': None}
@@ -302,14 +304,14 @@ if __name__ == '__main__':
                 print('start planning')
                 start = time.time()
                 plan, dQ, cost = planner.plan_goalset(qc, RT_grasps_base, sdf_cost_all, sdf_cost_obstacle, 
-                                                      env.base_position, q_solutions, use_standoff=True, 
+                                                      [0, 0, 0], q_solutions, use_standoff=True, 
                                                       axis_standoff=cfg['axis_standoff'], interpolate=interpolate)
                 planning_time = time.time() - start
                 print('plannnig time', planning_time, 'cost', cost)
                 
                 if args.vis:
-                    visualize_plan(robot, gripper_model, env.base_position, plan, depth_pc, RT_grasps_world)
-                    debug_plan(robot, gripper_model, env.base_position, plan, depth_pc, sdf_cost_obstacle, RT_grasps_world, show_grasp=False)
+                    visualize_plan(robot, gripper_model, [0, 0, 0], plan, depth_pc, RT_grasps_base)
+                    debug_plan(robot, gripper_model, [0, 0, 0], plan, depth_pc, sdf_cost_obstacle, RT_grasps_base, show_grasp=False)
 
                 env.robot.execute_plan(plan)
                 env.robot.close_gripper()
