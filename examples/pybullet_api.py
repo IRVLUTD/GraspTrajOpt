@@ -359,6 +359,17 @@ class Fetch(FixedBaseRobot):
         return joint_command
     
 
+    # pan and tilt in degrees
+    def look_at(self, pan, tilt):
+        q = self.q()
+        q[3] = pan * np.pi / 180
+        q[4] = tilt * np.pi / 180
+        self.cmd(q)
+        num = 200
+        for _ in range(num):
+            p.stepSimulation()        
+    
+
     def get_base_pose(self):
         pos, orn = p.getBasePositionAndOrientation(self._id)
         euler = p.getEulerFromQuaternion(orn)

@@ -160,6 +160,8 @@ if __name__ == '__main__':
 
             # move base first
             print('moving robot')
+            env.robot.look_at(pan=0, tilt=10)
+            env.get_observation()
             env.robot.move_to_xy(x_delta=2.0, y_delta=0.0)
             
             # for each object
