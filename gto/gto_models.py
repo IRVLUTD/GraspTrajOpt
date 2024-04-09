@@ -252,10 +252,11 @@ if __name__ == "__main__":
                           collision_link_names=None)
     robot_model.setup_workspace_field(arm_len=cfg['arm_len'], arm_height=cfg['arm_height'])
     print(robot_model.link_names)
+    print(robot_model.actuated_joint_names)
 
     # forward kinematics
     q_user_input = np.array([0.0] * robot_model.ndof)
-    if robot_name == 'fetch':
+    if 'fetch' in robot_name:
         q_user_input[2] = 0.4
         q_user_input[cfg['finger_index']] = 0.05
     elif robot_name == 'panda':

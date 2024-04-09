@@ -13,7 +13,7 @@ from utils import *
 
 class SceneReplicaEnv():
 
-    def __init__(self, data_dir, robot_name='fetch', scene_type='tabletop'):
+    def __init__(self, data_dir, robot_name='fetch', scene_type='tabletop', mobile=False):
 
         self.data_dir = data_dir
         self.model_dir = os.path.join(data_dir, "objects")
@@ -41,6 +41,8 @@ class SceneReplicaEnv():
         else:
             print(f'robot {robot_name} not supported')
             sys.exit(1)
+        if mobile:
+            base_position[0] = base_position[0] - 2.0
         self.base_position = base_position
         self.arm_height = arm_height
         self.recorded_gripper_position = None
@@ -136,7 +138,6 @@ class SceneReplicaEnv():
 
         # set robot
         if robot_name == 'fetch':
-            base_position = np.zeros((3, ))
             self.robot = Fetch(base_position, self.scene_type)
         elif robot_name == 'panda':
             self.robot = Panda(base_position, self.scene_type)        
@@ -603,7 +604,7 @@ def make_args():
         type=int,
         default=10,
         help="SceneReplica scene id",
-    )         
+    )
     args = parser.parse_args()
     return args
         
@@ -617,7 +618,7 @@ if __name__ == '__main__':
     scene_type = args.scene_type
 
     # create the table environment
-    env = SceneReplicaEnv(data_dir, robot_name, scene_type)
+    env = SceneReplicaEnv(data_dir, robot_name, scene_type, mobile=False)
     for scene_id in [36, 84, 68, 10, 77, 148, 48, 25, 104, 38, 27, 122, 141, 65, 39, 83, 130, 161, 33, 56]:
         env.setup_scene(scene_id)
         rgba, depth, mask, cam_pose, intrinsic_matrix = env.get_observation()

@@ -304,7 +304,7 @@ class Fetch(FixedBaseRobot):
         self.urdf_filename = f
         super().__init__(f, base_position=base_position, fix_base=fix_base)
         self.ee_index = 16
-        self.camera_link_index = 7
+        self.camera_link_index = 8
         self.gripper_open_joints = [0.05, 0.05]
         self.finger_index = [12, 13]
         self.wheels = [1, 2]
@@ -340,7 +340,7 @@ class Fetch(FixedBaseRobot):
         # move head
         if self.scene_type == 'tabletop':
             joint_command[3] = 0.009195
-            joint_command[4] = 0.908270
+            joint_command[4] = 0.608270
         elif self.scene_type == 'shelf':
             joint_command[3] = 0.009195
             joint_command[4] = 0.348270

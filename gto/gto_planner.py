@@ -273,7 +273,7 @@ if __name__ == "__main__":
     cfg = load_yaml(config_file)['robot_cfg']
     print(cfg)
 
-    if robot_name == 'fetch':
+    if 'fetch' in robot_name:
         RT = np.array([[-0.05241979, -0.45344928, -0.88973933,  0.41363978],
             [-0.27383122, -0.8502871,   0.44947574,  0.12551154],
             [-0.96034825,  0.26719978, -0.07959669,  0.97476065],
@@ -331,7 +331,7 @@ if __name__ == "__main__":
     quat = mat2quat(RT[:3, :3])
     orientation = [quat[1], quat[2], quat[3], quat[0]]
     # gripper
-    urdf_filename = os.path.join(model_dir, f"{robot_name}_gripper.urdf")
+    urdf_filename = os.path.join(root_dir, cfg['urdf_gripper_path'])
     gripper = GTORobotModel(model_dir, urdf_filename=urdf_filename)    
     vis.robot(
         gripper,
