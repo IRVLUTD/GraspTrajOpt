@@ -13,7 +13,7 @@ from utils import *
 
 class SceneReplicaEnv():
 
-    def __init__(self, data_dir, robot_name='fetch', scene_type='tabletop', mobile=False):
+    def __init__(self, urdf_filename, data_dir, robot_name='fetch', scene_type='tabletop', mobile=False):
 
         self.data_dir = data_dir
         self.model_dir = os.path.join(data_dir, "objects")
@@ -32,7 +32,7 @@ class SceneReplicaEnv():
         self.root_dir = os.path.dirname(os.path.abspath(__file__))
 
         self.connect()
-        if robot_name == 'fetch':
+        if 'fetch' in robot_name:
             base_position = np.array([0.0, 0.0, 0.0])
             arm_height = 1.1
         elif robot_name == 'panda':
@@ -70,7 +70,7 @@ class SceneReplicaEnv():
             "040_large_marker",
             "052_extra_large_clamp",
         )
-        self.reset(robot_name, base_position)
+        self.reset(urdf_filename, robot_name, base_position)
 
 
     def connect(self):
@@ -103,7 +103,7 @@ class SceneReplicaEnv():
         p.setRealTimeSimulation(0)        
 
 
-    def reset(self, robot_name, base_position):
+    def reset(self, urdf_filename, robot_name, base_position):
 
         p.resetSimulation()
         p.setTimeStep(self._timeStep)
@@ -137,10 +137,10 @@ class SceneReplicaEnv():
         )                
 
         # set robot
-        if robot_name == 'fetch':
-            self.robot = Fetch(base_position, self.scene_type)
+        if 'fetch' in robot_name:
+            self.robot = Fetch(urdf_filename, base_position, self.scene_type)
         elif robot_name == 'panda':
-            self.robot = Panda(base_position, self.scene_type)        
+            self.robot = Panda(urdf_filename, base_position, self.scene_type)        
         self.robot.retract()    
 
         # Set table and plane

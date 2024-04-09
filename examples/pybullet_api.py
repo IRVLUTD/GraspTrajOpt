@@ -252,10 +252,9 @@ class FixedBaseRobot:
 
 
 class Panda(FixedBaseRobot):
-    def __init__(self, base_position=[0.0] * 3, scene_type='tabletop'):
-        f = os.path.join(cwd, "../data/robots", "panda", "panda.urdf")
-        self.urdf_filename = f
-        super().__init__(f, base_position=base_position)
+    def __init__(self, urdf_filename, base_position=[0.0] * 3, scene_type='tabletop'):
+        self.urdf_filename = urdf_filename
+        super().__init__(urdf_filename, base_position=base_position)
         self.ee_index = 7
         self.camera_link_index = 10
         self.gripper_open_offsets = [0.04, 0.04]
@@ -299,19 +298,18 @@ class Panda(FixedBaseRobot):
     
 
 class Fetch(FixedBaseRobot):
-    def __init__(self, base_position=[0.0] * 3, scene_type='tabletop', fix_base=1):
-        f = os.path.join(cwd, "../data/robots", "fetch_igibson", "fetch_gripper.urdf")
-        self.urdf_filename = f
-        super().__init__(f, base_position=base_position, fix_base=fix_base)
+    def __init__(self, urdf_filename, base_position=[0.0] * 3, scene_type='tabletop', fix_base=1):
+        self.urdf_filename = urdf_filename
+        super().__init__(urdf_filename, base_position=base_position, fix_base=fix_base)
         self.ee_index = 16
-        self.camera_link_index = 8
+        self.camera_link_index = 7
+        self.wheels = [0, 1]
         self.gripper_open_joints = [0.05, 0.05]
         self.finger_index = [12, 13]
-        self.wheels = [1, 2]
         self.scene_type = scene_type
         self.path_controller = PathFinderController(1, 1, 1)
-        self.MAX_LINEAR_SPEED = 0.2
-        self.MAX_ANGULAR_SPEED = 0.2
+        self.MAX_LINEAR_SPEED = 0.1
+        self.MAX_ANGULAR_SPEED = 0.1
         self.wheel_axle_halflength = self.wheel_axle_length / 2.0
 
 
@@ -340,7 +338,7 @@ class Fetch(FixedBaseRobot):
         # move head
         if self.scene_type == 'tabletop':
             joint_command[3] = 0.009195
-            joint_command[4] = 0.608270
+            joint_command[4] = 0.908270
         elif self.scene_type == 'shelf':
             joint_command[3] = 0.009195
             joint_command[4] = 0.348270
@@ -542,7 +540,8 @@ def main(gui=True):
     # robot = KukaLBR()
     # robot = R2D2([0, 0, 0.5])
     # robot = Nextage()
-    robot = Fetch(fix_base=False)
+    urdf_filename = '../data/robots/fetch/fetch.urdf'
+    robot = Fetch(urdf_filename, fix_base=False)
     robot.retract()
 
     q0 = np.zeros(robot.ndof)

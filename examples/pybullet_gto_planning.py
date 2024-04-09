@@ -20,7 +20,7 @@ from transforms3d.quaternions import mat2quat
 
 def load_grasps(data_dir, robot_name, model):
 
-    if robot_name == 'fetch':
+    if 'fetch' in robot_name:
         # parse grasps
         grasp_dir = os.path.join(data_dir, "grasp_data", "refined_grasps")
         grasp_file = os.path.join(grasp_dir, f"fetch_gripper-{model}.json")
@@ -128,11 +128,11 @@ if __name__ == '__main__':
                           collision_link_names=cfg['collision_link_names'])
 
     # load robot gripper model
-    urdf_filename = os.path.join(robot_model_dir, f"{robot_name}_gripper.urdf")
-    gripper_model = GTORobotModel(robot_model_dir, urdf_filename=urdf_filename)
+    urdf_filename_gripper = os.path.join(root_dir, cfg['urdf_gripper_path'])
+    gripper_model = GTORobotModel(robot_model_dir, urdf_filename=urdf_filename_gripper)
 
     # create the table environment
-    env = SceneReplicaEnv(data_dir, robot_name, scene_type)
+    env = SceneReplicaEnv(urdf_filename, data_dir, robot_name, scene_type)
 
     # Initialize planner
     print('Initialize planner')
