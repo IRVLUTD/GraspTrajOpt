@@ -21,6 +21,18 @@ def load_yaml(file_path):
     return yaml_params
 
 
+def rotZ(rotz):
+    RotZ = np.array(
+        [
+            [np.cos(rotz), -np.sin(rotz), 0, 0],
+            [np.sin(rotz), np.cos(rotz), 0, 0],
+            [0, 0, 1, 0],
+            [0, 0, 0, 1],
+        ]
+    )
+    return RotZ
+
+
 def default_pose(robot_model):
     # set robot pose
     # ['r_wheel_joint', 'l_wheel_joint', 'torso_lift_joint', 'head_pan_joint', 'head_tilt_joint', 'shoulder_pan_joint', 
