@@ -42,7 +42,8 @@ class BasePlanner:
         tf_goal = builder.add_parameter("tf_goal", 16, goal_size)
 
         # get optimized robot base
-        q = builder.get_model_states(self.task_name)
+        q = builder.get_model_states(self.task_name)[:, 0]
+        print('q', q.shape)
         x = q[0]
         y = q[1]
         theta = q[2]
@@ -98,7 +99,7 @@ class BasePlanner:
             tf_goal[:, i] = RT.flatten()
 
         Q0 = optas.diag(qc) @ optas.DM.ones(self.robot.ndof, n)
-        x0 = np.zeros((3, ), dtype=np.float32)
+        x0 = np.zeros((3, n), dtype=np.float32)
 
         # Set initial seed
         self.solver.reset_initial_seed(
@@ -121,12 +122,55 @@ class BasePlanner:
 
         # Get robot configuration
         Q = solution[f"{self.robot_name}/q"]
-        y = solution[f"{self.task_name}/y"]
+        y = solution[f"{self.task_name}/y"][:, 0]
         print("***********************************") 
         print("Casadi robot base pose solution:")
-        print(Q, Q.shape)
         print(y, y.shape)
         return Q.toarray(), y.toarray().flatten()
+    
+
+    # visualize the solution
+    def visualize(self, robot, gripper, qc, RTs, RT_base):
+        # visualization
+        vis = Visualizer(camera_position=[3, 0, 3])
+        vis.grid_floor()      
+
+        q = [0.05, 0.05]
+        n = RTs.shape[0]
+        for i in range(n):
+            position = RTs[i, :3, 3]
+            # scalar-last (x, y, z, w) format in optas
+            quat = mat2quat(RTs[i, :3, :3])
+            orientation = [quat[1], quat[2], quat[3], quat[0]]
+            # gripper
+            vis.robot(
+                gripper,
+                base_position=position,
+                base_orientation=orientation,
+                q=q
+            )
+        # robot
+        vis.robot(
+            robot,
+            base_position=[0.0, 0, 0],
+            base_orientation=[0, 0, 0],
+            euler_degrees=True,
+            q=qc,
+            alpha=0.4,
+        )
+        # new base
+        position = RT_base[:3, 3]
+        # scalar-last (x, y, z, w) format in optas
+        quat = mat2quat(RT_base[:3, :3])
+        orientation = [quat[1], quat[2], quat[3], quat[0]]    
+        vis.robot(
+            robot,
+            base_position=position,
+            base_orientation=orientation,
+            q=qc,
+            alpha=0.4,
+        )    
+        vis.start()        
 
 
 def make_args():
@@ -197,42 +241,7 @@ if __name__ == "__main__":
     print(RT_base)
 
     # visualization
-    vis = Visualizer(camera_position=[3, 0, 3])
-    vis.grid_floor()      
-
-    q = [0.05, 0.05]
-    position = RT[0, :3, 3]
-    # scalar-last (x, y, z, w) format in optas
-    quat = mat2quat(RT[0, :3, :3])
-    orientation = [quat[1], quat[2], quat[3], quat[0]]
     # gripper
     urdf_filename = os.path.join(root_dir, cfg['urdf_gripper_path'])
-    gripper = GTORobotModel(model_dir, urdf_filename=urdf_filename)    
-    vis.robot(
-        gripper,
-        base_position=position,
-        base_orientation=orientation,
-        q=q
-    )
-    # robot
-    vis.robot(
-        robot,
-        base_position=[0.0, 0, 0],
-        base_orientation=[0, 0, 0],
-        euler_degrees=True,
-        q=qc,
-        alpha=0.4,
-    )
-    # new base
-    position = RT_base[:3, 3]
-    # scalar-last (x, y, z, w) format in optas
-    quat = mat2quat(RT_base[:3, :3])
-    orientation = [quat[1], quat[2], quat[3], quat[0]]    
-    vis.robot(
-        robot,
-        base_position=position,
-        base_orientation=orientation,
-        q=plan,
-        alpha=0.4,
-    )    
-    vis.start()
+    gripper = GTORobotModel(model_dir, urdf_filename=urdf_filename)     
+    planner.visualize(robot, gripper, qc, RT, RT_base)

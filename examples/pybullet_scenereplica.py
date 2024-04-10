@@ -11,6 +11,32 @@ from transforms3d.quaternions import mat2quat
 from utils import *
 
 
+def load_grasps(data_dir, robot_name, model):
+
+    if 'fetch' in robot_name:
+        # parse grasps
+        grasp_dir = os.path.join(data_dir, "grasp_data", "refined_grasps")
+        grasp_file = os.path.join(grasp_dir, f"fetch_gripper-{model}.json")
+        RT_grasps = parse_grasps(grasp_file)
+    elif robot_name == 'panda':
+        grasp_dir = os.path.join(data_dir, "grasp_data", "panda_simulated")
+        grasp_file = os.path.join(grasp_dir, f"{model}.npy")
+        try:
+            simulator_grasp = np.load(grasp_file, allow_pickle=True)
+            RT_grasps = simulator_grasp.item()["transforms"]
+        except:
+            simulator_grasp = np.load(
+                grasp_file,
+                allow_pickle=True,
+                fix_imports=True,
+                encoding="bytes",
+            )
+            RT_grasps = simulator_grasp.item()[b"transforms"]
+        offset_pose = np.array(rotZ(np.pi / 2))  # and
+        RT_grasps = np.matmul(RT_grasps, offset_pose)  # flip x, y 
+    return RT_grasps
+
+
 class SceneReplicaEnv():
 
     def __init__(self, urdf_filename, data_dir, robot_name='fetch', scene_type='tabletop', mobile=False):
@@ -70,6 +96,21 @@ class SceneReplicaEnv():
             "040_large_marker",
             "052_extra_large_clamp",
         )
+
+        self.ycb_object_names = (
+            "004_sugar_box",
+            "005_tomato_soup_can",
+            "011_banana",
+            "024_bowl",
+            "035_power_drill",
+        )        
+
+        # load grasps
+        self.RT_grasps = {}
+        for name in self.ycb_object_names:
+            print('loading grasps for ', robot_name, name)
+            self.RT_grasps[name] = load_grasps(self.data_dir, robot_name, name)
+
         self.reset(urdf_filename, robot_name, base_position, mobile)
 
 

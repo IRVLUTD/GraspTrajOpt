@@ -5,7 +5,7 @@ import pybullet as p
 import argparse
 import json
 import matplotlib.pyplot as plt
-from pybullet_api import Fetch, Panda
+from pybullet_api import pybullet_show_frame
 from pybullet_scenereplica import SceneReplicaEnv
 from utils import *
 import _init_paths
@@ -13,35 +13,10 @@ from mesh_to_sdf.depth_point_cloud import DepthPointCloud
 from optas.visualize import Visualizer
 from gto.gto_models import GTORobotModel
 from gto.gto_planner import GTOPlanner
+from gto.base_planner import BasePlanner
 from gto.ik_solver import IKSolver
 from gto.utils import *
 from transforms3d.quaternions import mat2quat
-    
-
-def load_grasps(data_dir, robot_name, model):
-
-    if 'fetch' in robot_name:
-        # parse grasps
-        grasp_dir = os.path.join(data_dir, "grasp_data", "refined_grasps")
-        grasp_file = os.path.join(grasp_dir, f"fetch_gripper-{model}.json")
-        RT_grasps = parse_grasps(grasp_file)
-    elif robot_name == 'panda':
-        grasp_dir = os.path.join(data_dir, "grasp_data", "panda_simulated")
-        grasp_file = os.path.join(grasp_dir, f"{model}.npy")
-        try:
-            simulator_grasp = np.load(grasp_file, allow_pickle=True)
-            RT_grasps = simulator_grasp.item()["transforms"]
-        except:
-            simulator_grasp = np.load(
-                grasp_file,
-                allow_pickle=True,
-                fix_imports=True,
-                encoding="bytes",
-            )
-            RT_grasps = simulator_grasp.item()[b"transforms"]
-        offset_pose = np.array(rotZ(np.pi / 2))  # and
-        RT_grasps = np.matmul(RT_grasps, offset_pose)  # flip x, y 
-    return RT_grasps    
 
 
 def make_args():
@@ -140,6 +115,7 @@ if __name__ == '__main__':
                          standoff_distance=standoff_distance,
                          standoff_offset=standoff_offset)
     ik_solver = IKSolver(robot, cfg['link_ee'], cfg['link_gripper'], collision_avoidance=ik_collision_avoidance)   
+    base_planner = BasePlanner(robot, cfg['link_ee'], cfg['link_gripper'])
     
     total_success = 0
     count = 0
@@ -164,6 +140,52 @@ if __name__ == '__main__':
             print('moving robot')
             env.robot.look_at(pan=0, tilt=10)
             env.get_observation()
+            # get robot base pose
+            pos, orn = env.get_robot_pose()
+            RT_base = np.eye(4)
+            quat = [orn[3], orn[0], orn[1], orn[2]]   #w, x, y, z
+            RT_base[:3, :3] = quat2mat(quat)
+            RT_base[:3, 3] = pos                 
+
+            # sample some grasps for each object to plan base position
+            # replace with perception for real world
+            RTs = []
+            for object_name in object_order:
+                # query object pose
+                pos, orn = env.get_object_pose(object_name)
+                obj_pose = list(pos) + [orn[3], orn[0], orn[1], orn[2]]
+                RT_obj = unpack_pose(obj_pose)
+                # get grasps
+                RT_grasps = env.RT_grasps[object_name]
+                # convert grasps to robot base
+                RT = np.matmul(np.linalg.inv(RT_base), np.matmul(RT_obj, RT_grasps))
+                print(RT.shape)
+                RTs.append(RT)
+            RTs_all = np.concatenate(RTs)
+            print(RTs_all.shape)
+            # sample 50 grasps
+            num = 50
+            index = np.random.choice(RTs_all.shape[0], num)
+            RTs_all = RTs_all[index]
+            print(RTs_all.shape)
+
+            # planing base
+            q0 = np.array(env.robot.q()).reshape((env.robot.ndof, 1))
+            plan, y = base_planner.plan_goalset(q0, RTs_all)
+            RT_base_delta = rotZ(y[2])
+            RT_base_delta[0, 3] = y[0]
+            RT_base_delta[1, 3] = y[1]
+            RT_base_delta = np.linalg.inv(RT_base_delta)
+            print(RT_base_delta)
+
+            # show new base pose
+            RT_base_new = RT_base @ RT_base_delta
+            pybullet_show_frame(RT_base_new)
+
+            # visualize base
+            base_planner.visualize(robot, gripper_model, q0, RTs_all, RT_base_delta)
+
+            input('next?')
             env.robot.move_to_xy(x_delta=2.0, y_delta=0.0)
             env.robot.look_at(pan=0, tilt=50)       
             
@@ -209,7 +231,7 @@ if __name__ == '__main__':
                 sdf_cost_obstacle = depth_pc_obstacle.get_sdf_cost(world_points)
 
                 # load grasps
-                RT_grasps = load_grasps(data_dir, robot_name, object_name)
+                RT_grasps = env.RT_grasps[object_name]
 
                 # query object pose in world
                 pos, orn = env.get_object_pose(object_name)
