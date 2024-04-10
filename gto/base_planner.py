@@ -12,7 +12,6 @@ from optas.visualize import Visualizer
 from optas.spatialmath import rotz, rt2tr
 from optas.models import TaskModel
 from gto.gto_models import GTORobotModel
-from gto.ik_solver import IKSolver
 from gto.utils import load_yaml, get_root_dir, rotZ
 from transforms3d.quaternions import mat2quat
 
