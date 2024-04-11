@@ -423,7 +423,8 @@ class Fetch(FixedBaseRobot):
         theta_goal = theta + theta_delta
         dt = 0.01
         beta = angle_mod(theta_goal - theta)
-        while beta > 0.01:
+        print(theta, theta_goal, theta_delta, beta)
+        while np.absolute(beta) > 0.02:
             v, w = self.path_controller.calc_control_theta(theta, theta_goal)
 
             if abs(v) > self.MAX_LINEAR_SPEED:
@@ -431,6 +432,7 @@ class Fetch(FixedBaseRobot):
 
             if abs(w) > self.MAX_ANGULAR_SPEED:
                 w = np.sign(w) * self.MAX_ANGULAR_SPEED
+            print('linear velocity', v, 'angular velocity', w)
 
             # send command to robot
             right_wheel_joint_vel, left_wheel_joint_vel = self.command_to_control([v, w])

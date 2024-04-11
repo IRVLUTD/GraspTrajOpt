@@ -100,7 +100,7 @@ if __name__ == '__main__':
                           urdf_filename=urdf_filename, 
                           time_derivs=[0, 1],  # i.e. joint position/velocity trajectory
                           param_joints=cfg['param_joints'],
-                          collision_link_names=cfg['collision_link_names'])
+                          collision_link_names=None)
 
     # load robot gripper model
     urdf_filename_gripper = os.path.join(root_dir, cfg['urdf_gripper_path'])
@@ -138,18 +138,24 @@ if __name__ == '__main__':
 
             # move base first
             print('moving robot')
-            env.robot.look_at(pan=0, tilt=10)
-            env.get_observation()
             # get robot base pose
             pos, orn = env.get_robot_pose()
             RT_base = np.eye(4)
             quat = [orn[3], orn[0], orn[1], orn[2]]   #w, x, y, z
             RT_base[:3, :3] = quat2mat(quat)
-            RT_base[:3, 3] = pos                 
+            RT_base[:3, 3] = pos     
+
+            # get points in robot base
+            env.robot.look_at(pan=0, tilt=10)
+            rgba, depth, mask, cam_pose, intrinsic_matrix = env.get_observation()
+            cam_pose = np.linalg.inv(RT_base) @ cam_pose
+            depth_pc = DepthPointCloud(depth, intrinsic_matrix, cam_pose, target_mask=None, threshold=np.inf)
+            robot.setup_occupancy_grid(depth_pc.points)
 
             # sample some grasps for each object to plan base position
             # replace with perception for real world
             RTs = []
+            num = 2   # sample num grasps for each object
             for object_name in object_order:
                 # query object pose
                 pos, orn = env.get_object_pose(object_name)
@@ -159,19 +165,27 @@ if __name__ == '__main__':
                 RT_grasps = env.RT_grasps[object_name]
                 # convert grasps to robot base
                 RT = np.matmul(np.linalg.inv(RT_base), np.matmul(RT_obj, RT_grasps))
+                n = RT.shape[0]
+                in_collision = np.zeros((n, ), dtype=np.int32)
+                for i in range(RT.shape[0]):
+                    # check if the grasp is in collision
+                    RT_off = RT[i] @ env.robot.get_standoff_pose(offset, cfg['axis_standoff'])
+                    gripper_points, normals = gripper_model.compute_fk_surface_points(cfg['gripper_open_offsets'], tf_base=RT_off)
+                    sdf = depth_pc.get_sdf(gripper_points)
+                    ratio = np.sum(sdf < 0) / len(sdf)
+                    if ratio > 0.01:
+                        in_collision[i] = 1
+                RT = RT[in_collision == 0]
                 print(RT.shape)
-                RTs.append(RT)
+                if RT.shape[0] > 0:
+                    index = np.random.choice(RT.shape[0], num)
+                    RTs.append(RT[index])
             RTs_all = np.concatenate(RTs)
-            print(RTs_all.shape)
-            # sample 50 grasps
-            num = 50
-            index = np.random.choice(RTs_all.shape[0], num)
-            RTs_all = RTs_all[index]
             print(RTs_all.shape)
 
             # planing base
             q0 = np.array(env.robot.q()).reshape((env.robot.ndof, 1))
-            plan, y = base_planner.plan_goalset(q0, RTs_all)
+            plan, y = base_planner.plan_goalset(q0, RTs_all, robot.occupancy_grid)
             RT_base_delta = rotZ(y[2])
             RT_base_delta[0, 3] = y[0]
             RT_base_delta[1, 3] = y[1]
@@ -185,9 +199,28 @@ if __name__ == '__main__':
             # visualize base
             base_planner.visualize(robot, gripper_model, q0, RTs_all, RT_base_delta)
 
-            input('next?')
-            env.robot.move_to_xy(x_delta=2.0, y_delta=0.0)
-            env.robot.look_at(pan=0, tilt=50)       
+            x_delta = RT_base_delta[0, 3]
+            y_delta = RT_base_delta[1, 3]
+            input(f'next? {x_delta} {y_delta}')
+            env.robot.move_to_xy(x_delta, y_delta)
+
+            # get new robot base pose
+            pos, orn = env.get_robot_pose()
+            RT_base = np.eye(4)
+            quat = [orn[3], orn[0], orn[1], orn[2]]   #w, x, y, z
+            RT_base[:3, :3] = quat2mat(quat)
+            RT_base[:3, 3] = pos
+            delta = np.linalg.inv(RT_base) @ RT_base_new
+            quat = mat2quat(delta[:3, :3])
+            orn = [quat[1], quat[2], quat[3], quat[0]]
+            euler = p.getEulerFromQuaternion(orn)
+            yaw = euler[2]            
+
+            # input(f'next? yaw {yaw}')
+            env.robot.move_to_theta(yaw)
+            env.robot.look_at(pan=0, tilt=50)
+
+            # input('next?')
             
             # for each object
             results = {}

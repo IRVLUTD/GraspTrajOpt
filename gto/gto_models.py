@@ -212,6 +212,48 @@ class GTORobotModel(RobotModel):
 
         dist = np.linalg.norm(plan[:, 0] - plan[:, T-1])
         return cost, dist
+    
+
+    # build an x-y plane occupancy grid using points in robot base
+    def setup_occupancy_grid(self, points):
+        index = points[:, 2] > 0.01
+        xys = points[index, :2]
+        self.xlim_2d = [0, np.max(xys[:, 0])]
+        self.ylim_2d = [np.min(xys[:, 1]), np.max(xys[:, 1])]
+        self.occupancy_grid_origin = np.array([self.xlim_2d[0] - self.field_margin, self.ylim_2d[0] - self.field_margin]).reshape((1, 2))
+        workspace_points = np.array(np.meshgrid(
+                            np.arange(self.xlim_2d[0] - self.field_margin, self.xlim_2d[1] + self.field_margin, self.grid_resolution),
+                            np.arange(self.ylim_2d[0] - self.field_margin, self.ylim_2d[1] + self.field_margin, self.grid_resolution),
+                            indexing='ij'))
+        self.occupancy_grid_shape = workspace_points.shape[1:]
+        self.occupancy_grid = np.zeros(self.occupancy_grid_shape, dtype=np.float32)
+        self.occupancy_grid_size = self.occupancy_grid.size
+        print('occupancy grid origin', self.occupancy_grid_origin)
+        print('occupancy grid shape', self.occupancy_grid_shape)
+        print('occupancy grid field', self.occupancy_grid.shape)
+        # build the grid
+        n = xys.shape[0]
+        origin = np.repeat(self.occupancy_grid_origin, n, axis=0)
+        idxes = (xys - origin) / self.grid_resolution
+        idxes[:, 0] = np.clip(idxes[:, 0], 0, self.occupancy_grid_shape[0] - 1)
+        idxes[:, 1] = np.clip(idxes[:, 1], 0, self.occupancy_grid_shape[1] - 1)
+        idxes = idxes.astype(np.int32)
+        self.occupancy_grid[idxes[:, 0], idxes[:, 1]] = 1
+
+
+    def points_to_offsets_occupancy(self, points):
+        n = points.shape[0]
+        xys = points[:, :2]
+        origin = np.repeat(self.occupancy_grid_origin, n, axis=0)
+        idxes = optas.floor((xys - origin) / self.grid_resolution)
+        idxes[:, 0] = cs.fmax(idxes[:, 0], 0)
+        idxes[:, 0] = cs.fmin(idxes[:, 0], self.occupancy_grid_shape[0] - 1)
+        idxes[:, 1] = cs.fmax(idxes[:, 1], 0)
+        idxes[:, 1] = cs.fmin(idxes[:, 1], self.occupancy_grid_shape[1] - 1)
+        # offset = n_3 + N_3 * (n_2 + N_2 * n_1)
+        # https://eli.thegreenplace.net/2015/memory-layout-of-multi-dimensional-arrays
+        offsets = idxes[:, 1] + self.occupancy_grid_shape[1] * idxes[:, 0]
+        return offsets        
 
 
 def make_args():

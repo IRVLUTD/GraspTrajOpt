@@ -40,6 +40,11 @@ class BasePlanner:
         # Setup parameters
         # tf goals are grasps in the current robot base pose
         tf_goal = builder.add_parameter("tf_goal", 16, goal_size)
+        # current robot joint configuration        
+        qc = builder.add_parameter("qc", self.robot.ndof)
+        # sdf field
+        if self.collision_avoidance:
+            occupancy_grid = builder.add_parameter("occupancy_grid", self.robot.occupancy_grid_size)        
 
         # get optimized robot base
         q = builder.get_model_states(self.task_name)[:, 0]
@@ -82,6 +87,21 @@ class BasePlanner:
                 cost[i] = optas.sumsqr(points_tf - points_tf_goal)
             builder.add_cost_term("cost_pos", optas.sum1(cost))
 
+        # obstacle avoidance
+        if self.collision_avoidance:
+            points_world_all = None
+            for name in self.robot.surface_pc_map.keys():
+                tf = tf_base @ self.robot.visual_tf[name](qc)
+                points = self.robot.surface_pc_map[name].points
+                points_world = tf[:3, :3] @ points.T + tf[:3, 3].reshape((3, 1))
+                if points_world_all is None:
+                    points_world_all = points_world
+                else:
+                    points_world_all = optas.horzcat(points_world_all, points_world)
+            points_world_all = points_world_all.T
+            offsets = self.robot.points_to_offsets_occupancy(points_world_all)
+            builder.add_cost_term("cost_obstacle", 100 * optas.sum1(occupancy_grid[offsets]))
+
         # Constraint: joint position limits
         builder.enforce_model_limits(self.robot_name)  # joint limits extracted from URDF        
 
@@ -90,7 +110,12 @@ class BasePlanner:
         self.solver = optas.CasADiSolver(builder.build()).setup("ipopt", solver_options=solver_options)
     
 
-    def plan_goalset(self, qc, RTs):
+    def plan_goalset(self, qc, RTs, occupancy_grid=None):
+
+        # import matplotlib.pyplot as plt
+        # plt.imshow(occupancy_grid)
+        # plt.show()
+
         n = RTs.shape[0]
         self.setup_optimization(goal_size=n)
         tf_goal = np.zeros((16, n))
@@ -110,12 +135,21 @@ class BasePlanner:
         )
 
         # Set parameters
-        self.solver.reset_parameters(
-            {
-                "tf_goal": optas.DM(tf_goal),
-                f"{self.robot_name}/q/p": self.robot.extract_parameter_dimensions(Q0),
-            }
-        )
+        if self.collision_avoidance:
+            self.solver.reset_parameters(
+                {
+                    "tf_goal": optas.DM(tf_goal),
+                    "occupancy_grid": optas.DM(occupancy_grid.flatten()),
+                    f"{self.robot_name}/q/p": self.robot.extract_parameter_dimensions(Q0),
+                }
+            )            
+        else:
+            self.solver.reset_parameters(
+                {
+                    "tf_goal": optas.DM(tf_goal),
+                    f"{self.robot_name}/q/p": self.robot.extract_parameter_dimensions(Q0),
+                }
+            )
 
         # Solve problem
         solution = self.solver.solve()
@@ -223,8 +257,11 @@ if __name__ == "__main__":
                         time_derivs=[0, 1],  # i.e. joint position/velocity trajectory
                         param_joints=cfg['param_joints'],
                         collision_link_names=cfg['collision_link_names'])
-    robot.setup_workspace_field(arm_len=cfg['arm_len'], arm_height=cfg['arm_height'])
     print('optimized joint names:', robot.optimized_joint_names)
+    
+    # sample some points as obstacles
+    points = 5 * np.random.randn(1000, 3)
+    robot.setup_occupancy_grid(points)
 
     # Initialize planner
     planner = BasePlanner(robot, cfg['link_ee'], cfg['link_gripper'])
@@ -233,7 +270,7 @@ if __name__ == "__main__":
     # Plan base location
     RT[:2, 3] += 2 * np.random.randn(2)
     RT = np.expand_dims(RT, axis=0)
-    plan, y = planner.plan_goalset(qc, RT)
+    plan, y = planner.plan_goalset(qc, RT, robot.occupancy_grid)
     RT_base = rotZ(y[2])
     RT_base[0, 3] = y[0]
     RT_base[1, 3] = y[1]
