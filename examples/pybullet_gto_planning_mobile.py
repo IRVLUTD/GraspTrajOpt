@@ -155,7 +155,7 @@ if __name__ == '__main__':
             # sample some grasps for each object to plan base position
             # replace with perception for real world
             RTs = []
-            num = 2   # sample num grasps for each object
+            num = 5   # sample num grasps for each object
             for object_name in object_order:
                 # query object pose
                 pos, orn = env.get_object_pose(object_name)

@@ -55,6 +55,13 @@ class BasePlanner:
         R = rotz(theta)
         t = cs.horzcat(x, y, 0.0)
         tf_base = rt2tr(R, t)
+        # tf base is RT_b'b, old base in new base
+        R_inv = R.T
+        t_inv = -R.T @ t.T
+        tf_base_inv = rt2tr(R_inv, t_inv)
+
+        # constraint for theta
+        builder.add_bound_inequality_constraint("theta_bound", -np.pi, theta, np.pi)
 
         # penalize movement
         builder.add_cost_term("cost_effort", 0.01 * optas.sumsqr(q))
@@ -69,7 +76,7 @@ class BasePlanner:
         # trajectory for end-effector (FK) in robot base
         tf_gripper = self.fk(Q)
 
-        # Cost: reach goal pose
+        # Cost: reach goal pose, cost in new base
         if goal_size == 1:
             points_tf = tf_gripper[:3, :3] @ self.gripper_points.T + tf_gripper[:3, 3].reshape((3, 1))
             tf_g = tf_goal[:, 0].reshape((4, 4)).T
@@ -87,12 +94,14 @@ class BasePlanner:
                 cost[i] = optas.sumsqr(points_tf - points_tf_goal)
             builder.add_cost_term("cost_pos", optas.sum1(cost))
 
-        # obstacle avoidance
+        # obstacle avoidance, cost in old base since occupancy is defined in old base
         if self.collision_avoidance:
             points_world_all = None
+            count = 0
             for name in self.robot.surface_pc_map.keys():
-                tf = tf_base @ self.robot.visual_tf[name](qc)
+                tf = tf_base_inv @ self.robot.visual_tf[name](qc)
                 points = self.robot.surface_pc_map[name].points
+                count += points.shape[0]
                 points_world = tf[:3, :3] @ points.T + tf[:3, 3].reshape((3, 1))
                 if points_world_all is None:
                     points_world_all = points_world
@@ -100,7 +109,14 @@ class BasePlanner:
                     points_world_all = optas.horzcat(points_world_all, points_world)
             points_world_all = points_world_all.T
             offsets = self.robot.points_to_offsets_occupancy(points_world_all)
-            builder.add_cost_term("cost_obstacle", 100 * optas.sum1(occupancy_grid[offsets]))
+            builder.add_cost_term("cost_obstacle", 10 * optas.sum1(occupancy_grid[offsets]))
+            # builder.add_cost_term("cost_obstacle", optas.sum1(self.robot.lut(points_world_all[:, :2])))
+            # builder.add_equality_constraint("con_obstacle", optas.sum1(occupancy_grid[offsets]))
+
+            # cost = cs.MX.zeros(count)
+            # for i in range(count):
+            #     cost[i] = self.robot.lut(points_world_all[i, :2])
+            # builder.add_cost_term("sdf_cost", optas.sumsqr(cost))
 
         # Constraint: joint position limits
         builder.enforce_model_limits(self.robot_name)  # joint limits extracted from URDF        
@@ -113,7 +129,8 @@ class BasePlanner:
     def plan_goalset(self, qc, RTs, occupancy_grid=None):
 
         # import matplotlib.pyplot as plt
-        # plt.imshow(occupancy_grid)
+        # plt.imshow(occupancy_grid.reshape(self.robot.occupancy_grid_shape))
+        # print(np.min(occupancy_grid), np.max(occupancy_grid))
         # plt.show()
 
         n = RTs.shape[0]
@@ -139,7 +156,7 @@ class BasePlanner:
             self.solver.reset_parameters(
                 {
                     "tf_goal": optas.DM(tf_goal),
-                    "occupancy_grid": optas.DM(occupancy_grid.flatten()),
+                    "occupancy_grid": optas.DM(occupancy_grid),
                     f"{self.robot_name}/q/p": self.robot.extract_parameter_dimensions(Q0),
                 }
             )            
@@ -156,11 +173,51 @@ class BasePlanner:
 
         # Get robot configuration
         Q = solution[f"{self.robot_name}/q"]
-        y = solution[f"{self.task_name}/y"][:, 0]
+        y = solution[f"{self.task_name}/y"][:, 0].toarray().flatten()
+
+        # compute collision cost
+        if self.collision_avoidance:
+
+            RT_base = rotZ(y[2])
+            RT_base[0, 3] = y[0]
+            RT_base[1, 3] = y[1]
+            RT_base_inv = np.linalg.inv(RT_base)
+
+            points_world_all = None
+            for name in self.robot.surface_pc_map.keys():              
+                tf = RT_base_inv @ self.robot.visual_tf[name](qc)
+                points = self.robot.surface_pc_map[name].points
+                points_world = tf[:3, :3] @ points.T + tf[:3, 3].reshape((3, 1))
+                if points_world_all is None:
+                    points_world_all = points_world
+                else:
+                    points_world_all = np.concatenate((points_world_all, points_world), axis=1)
+            points_world_all = points_world_all.T
+            print(points_world_all.shape)
+            offsets = self.robot.points_to_offsets_occupancy_numpy(points_world_all)
+            cost = occupancy_grid[offsets]
+ 
+            # count = points_world_all.shape[0]
+            # cost = np.zeros((count, ), dtype=np.float32)
+            # for i in range(count):
+            #     cost[i] = self.robot.lut(points_world_all[i, :2])
+            print('collision cost', np.sum(cost))
+
+            cost = self.robot.cost_function(qc, RT_base_inv, occupancy_grid)
+            print('collision cost from function', cost)
+
+            import matplotlib.pyplot as plt
+            occupancy_grid[occupancy_grid > 0] = 255
+            occupancy_grid[offsets] = 128
+            occupancy_grid = occupancy_grid.reshape(self.robot.occupancy_grid_shape)
+            plt.imshow(occupancy_grid)
+            plt.show()
+
+
         print("***********************************") 
         print("Casadi robot base pose solution:")
         print(y, y.shape)
-        return Q.toarray(), y.toarray().flatten()
+        return Q.toarray(), y
     
 
     # visualize the solution

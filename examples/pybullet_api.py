@@ -315,7 +315,7 @@ class Fetch(FixedBaseRobot):
         self.gripper_open_joints = [0.05, 0.05]
         self.finger_index = [12, 13]
         self.scene_type = scene_type
-        self.path_controller = PathFinderController(1, 1, 1)
+        self.path_controller = PathFinderController(1, 1, 3)
         self.MAX_LINEAR_SPEED = 0.1
         self.MAX_ANGULAR_SPEED = 0.1
         self.wheel_axle_halflength = self.wheel_axle_length / 2.0
