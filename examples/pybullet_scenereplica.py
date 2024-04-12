@@ -97,13 +97,13 @@ class SceneReplicaEnv():
             "052_extra_large_clamp",
         )
 
-        self.ycb_object_names = (
-            "004_sugar_box",
-            "005_tomato_soup_can",
-            "011_banana",
-            "024_bowl",
-            "035_power_drill",
-        )        
+        # self.ycb_object_names = (
+        #     "004_sugar_box",
+        #     "005_tomato_soup_can",
+        #     "011_banana",
+        #     "024_bowl",
+        #     "035_power_drill",
+        # )        
 
         # load grasps
         self.RT_grasps = {}

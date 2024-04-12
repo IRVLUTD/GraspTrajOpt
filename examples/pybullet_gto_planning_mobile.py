@@ -164,22 +164,10 @@ if __name__ == '__main__':
                 RT_grasps = env.RT_grasps[object_name]
                 # convert grasps to robot base
                 RT = np.matmul(np.linalg.inv(RT_base), np.matmul(RT_obj, RT_grasps))
-                n = RT.shape[0]
-                in_collision = np.zeros((n, ), dtype=np.int32)
-                for i in range(RT.shape[0]):
-                    # check if the grasp is in collision
-                    RT_off = RT[i] @ env.robot.get_standoff_pose(offset, cfg['axis_standoff'])
-                    gripper_points, normals = gripper_model.compute_fk_surface_points(cfg['gripper_open_offsets'], tf_base=RT_off)
-                    sdf = depth_pc.get_sdf(gripper_points)
-                    ratio = np.sum(sdf < 0) / len(sdf)
-                    if ratio > 0.01:
-                        in_collision[i] = 1
-                RT = RT[in_collision == 0]
-                print(RT.shape)
                 RTs[object_name] = RT
 
             # plan base location until no collision
-            num = 2   # sample num grasps for each object
+            num = 1   # sample num grasps for each object
             while 1:
                 grasps = []
                 for object_name in object_order:
@@ -231,7 +219,7 @@ if __name__ == '__main__':
             results = {}
             set_objects = set(object_order)
             for object_name in object_order:
-                # if object_name != '003_cracker_box':
+                # if object_name != '040_large_marker':
                 #     env.reset_objects(object_name)
                 #     set_objects.remove(object_name)
                 #     continue
@@ -295,7 +283,7 @@ if __name__ == '__main__':
 
                     ratio = np.sum(sdf < 0) / len(sdf)
                     print(f'grasp {i}, collision ratio {ratio}')
-                    if ratio > 0.01:
+                    if ratio > 0.1:
                         in_collision[i] = 1
 
                     # visualization
@@ -361,13 +349,13 @@ if __name__ == '__main__':
 
                 # plan to a grasp set
                 qc = env.robot.q()
-                print('start planning')
+                print('start planning', object_name)
                 start = time.time()
                 plan, dQ, cost = planner.plan_goalset(qc, RT_grasps_base, sdf_cost_all, sdf_cost_obstacle, 
                                                       [0, 0, 0], q_solutions, use_standoff=True, 
                                                       axis_standoff=cfg['axis_standoff'], interpolate=interpolate)
                 planning_time = time.time() - start
-                print('plannnig time', planning_time, 'cost', cost)
+                print('plannnig time', planning_time, 'cost', cost, object_name)
                 
                 if args.vis:
                     visualize_plan(robot, gripper_model, [0, 0, 0], plan, depth_pc, RT_grasps_base)
