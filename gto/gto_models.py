@@ -216,7 +216,7 @@ class GTORobotModel(RobotModel):
     
 
     # build an x-y plane occupancy grid using points in robot base
-    def setup_occupancy_grid(self, points, epsilon=0.01):
+    def setup_occupancy_grid(self, points, epsilon=0.02):
         index = points[:, 2] > 0.01
         xys = points[index, :2]
         self.xlim_2d = [0, np.max(xys[:, 0])]
@@ -236,24 +236,12 @@ class GTORobotModel(RobotModel):
         distances, indices = kd_tree.query(workspace_points)
         cost = np.zeros_like(distances)
         index = distances < epsilon
-        cost[index] = np.square(distances[index] - epsilon) / (2 * epsilon)
+        cost[index] = 1
         self.occupancy_grid_size = workspace_points.shape[0]
         self.occupancy_grid = cost.copy()
         print('occupancy grid origin', self.occupancy_grid_origin)
         print('occupancy grid shape', self.occupancy_grid_shape)
         print('occupancy grid field', self.occupancy_grid.shape)
-        self.cost_function = self.setup_occupancy_grid_function()   
-
-        # n = xys.shape[0]
-        # origin = np.repeat(self.occupancy_grid_origin, n, axis=0)
-        # idxes = (xys - origin) / self.grid_resolution
-        # idxes[:, 0] = np.clip(idxes[:, 0], 0, self.occupancy_grid_shape[0] - 1)
-        # idxes[:, 1] = np.clip(idxes[:, 1], 0, self.occupancy_grid_shape[1] - 1)
-        # idxes = idxes.astype(np.int32)
-        # self.occupancy_grid[idxes[:, 0], idxes[:, 1]] = 1
-        # 2d lookup table
-        # data_flat = self.occupancy_grid.ravel(order="F")
-        # self.lut = cs.interpolant('lut', 'linear', [self.xgrid, self.ygrid], data_flat)
 
 
     def points_to_offsets_occupancy(self, points):
@@ -285,7 +273,6 @@ class GTORobotModel(RobotModel):
     
 
     def setup_occupancy_grid_function(self):
-            
         qc = cs.MX.sym("qc", self.ndof)
         tf_base_inv = cs.MX.sym("tf_base_inv", 4, 4)
         occupancy_grid = cs.MX.sym("occupancy_grid", self.occupancy_grid_size)

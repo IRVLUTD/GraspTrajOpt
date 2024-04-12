@@ -154,8 +154,7 @@ if __name__ == '__main__':
 
             # sample some grasps for each object to plan base position
             # replace with perception for real world
-            RTs = []
-            num = 5   # sample num grasps for each object
+            RTs = {}           
             for object_name in object_order:
                 # query object pose
                 pos, orn = env.get_object_pose(object_name)
@@ -177,31 +176,39 @@ if __name__ == '__main__':
                         in_collision[i] = 1
                 RT = RT[in_collision == 0]
                 print(RT.shape)
-                if RT.shape[0] > 0:
-                    index = np.random.choice(RT.shape[0], num)
-                    RTs.append(RT[index])
-            RTs_all = np.concatenate(RTs)
-            print(RTs_all.shape)
+                RTs[object_name] = RT
 
-            # planing base
-            q0 = np.array(env.robot.q()).reshape((env.robot.ndof, 1))
-            plan, y = base_planner.plan_goalset(q0, RTs_all, robot.occupancy_grid)
+            # plan base location until no collision
+            num = 2   # sample num grasps for each object
+            while 1:
+                grasps = []
+                for object_name in object_order:
+                    RT = RTs[object_name]
+                    if RT.shape[0] > 0:
+                        index = np.random.choice(RT.shape[0], num)
+                        grasps.append(RT[index])
+                RTs_all = np.concatenate(grasps)
+                print(RTs_all.shape)
+                # planing base
+                q0 = np.array(env.robot.q()).reshape((env.robot.ndof, 1))
+                plan, y, err_pos, err_rot, cost = base_planner.plan_goalset(q0, RTs_all)
+                if cost == 0:
+                    break
+
+            # show new base pose
             RT_base_delta = rotZ(y[2])
             RT_base_delta[0, 3] = y[0]
             RT_base_delta[1, 3] = y[1]
             RT_base_delta = np.linalg.inv(RT_base_delta)
-            print(RT_base_delta)
-
-            # show new base pose
+            print(RT_base_delta)            
             RT_base_new = RT_base @ RT_base_delta
             pybullet_show_frame(RT_base_new)
-
             # visualize base
-            base_planner.visualize(robot, gripper_model, q0, RTs_all, RT_base_delta)
+            # base_planner.visualize(robot, gripper_model, q0, RTs_all, RT_base_delta)
 
             x_delta = RT_base_delta[0, 3]
             y_delta = RT_base_delta[1, 3]
-            input(f'next? {x_delta} {y_delta}')
+            # input(f'next? {x_delta} {y_delta}')
             env.robot.move_to_xy(x_delta, y_delta)
 
             # get new robot base pose
@@ -216,11 +223,9 @@ if __name__ == '__main__':
             euler = p.getEulerFromQuaternion(orn)
             yaw = euler[2]            
 
-            # input(f'next? yaw {yaw}')
+            # rotate robot
             env.robot.move_to_theta(yaw)
             env.robot.look_at(pan=0, tilt=50)
-
-            # input('next?')
             
             # for each object
             results = {}
