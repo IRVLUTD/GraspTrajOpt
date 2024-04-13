@@ -81,7 +81,7 @@ if __name__ == '__main__':
         print('unsupported scene type:', scene_type)
         sys.exit(1)
     # define the standoff pose for collision checking
-    offset = -0.1
+    offset = -0.01
 
     # load config file
     root_dir = get_root_dir()
@@ -175,7 +175,7 @@ if __name__ == '__main__':
                 print(object_name, RTs[object_name].shape)
 
             # plan base location until no collision
-            num = 1   # sample num grasps for each object
+            num = 2   # sample num grasps for each object
             while 1:
                 grasps = []
                 for object_name in object_order:
