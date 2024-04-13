@@ -81,7 +81,7 @@ if __name__ == '__main__':
         print('unsupported scene type:', scene_type)
         sys.exit(1)
     # define the standoff pose for collision checking
-    offset = -0.01    
+    offset = -0.1
 
     # load config file
     root_dir = get_root_dir()
@@ -164,7 +164,15 @@ if __name__ == '__main__':
                 RT_grasps = env.RT_grasps[object_name]
                 # convert grasps to robot base
                 RT = np.matmul(np.linalg.inv(RT_base), np.matmul(RT_obj, RT_grasps))
-                RTs[object_name] = RT
+                # filter grasps under object
+                n = RT.shape[0]
+                under = np.zeros((n, ), dtype=np.int32)
+                RT_obj_base = np.linalg.inv(RT_base) @ RT_obj
+                for i in range(n):
+                    if RT[i, 2, 3] < RT_obj_base[2, 3]:
+                        under[i] = 1
+                RTs[object_name] = RT[under == 0]
+                print(object_name, RTs[object_name].shape)
 
             # plan base location until no collision
             num = 1   # sample num grasps for each object
@@ -289,7 +297,7 @@ if __name__ == '__main__':
 
                     ratio = np.sum(sdf < 0) / len(sdf)
                     print(f'grasp {i}, collision ratio {ratio}')
-                    if ratio > 0.1:
+                    if ratio > 0.01:
                         in_collision[i] = 1
 
                     # visualization
