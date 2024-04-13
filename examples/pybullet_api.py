@@ -361,13 +361,25 @@ class Fetch(FixedBaseRobot):
 
     # pan and tilt in degrees
     def look_at(self, pan, tilt):
+        print('pan', pan, 'tilt', tilt)
         q = self.q()
         q[3] = pan * np.pi / 180
         q[4] = tilt * np.pi / 180
         self.cmd(q)
         num = 200
         for _ in range(num):
-            p.stepSimulation()        
+            p.stepSimulation()
+
+    # point is in world
+    def look_at_point(self, point):
+        # camera pos
+        pos, orn = p.getLinkState(self._id, self.camera_link_index)[:2]
+        direction = (point - pos) / np.linalg.norm(point - pos)
+        z = np.array([0, 0, 1])
+        dot_product = np.dot(direction, z)
+        tilt = np.arccos(dot_product) - np.pi / 2
+        pan = np.arctan2(direction[1], direction[0])
+        self.look_at(pan * 180 / np.pi, tilt * 180 / np.pi)
     
 
     def get_base_pose(self):

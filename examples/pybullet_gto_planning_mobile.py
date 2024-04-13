@@ -223,10 +223,22 @@ if __name__ == '__main__':
                 #     env.reset_objects(object_name)
                 #     set_objects.remove(object_name)
                 #     continue
+                # input('next?')
+
                 count += 1
                 print(object_name)
                 # reset scene
                 env.reset_scene(set_objects)
+
+                # query object pose in world
+                pos, orn = env.get_object_pose(object_name)
+                obj_pose = list(pos) + [orn[3], orn[0], orn[1], orn[2]]
+                RT_obj = unpack_pose(obj_pose)
+                print(object_name, RT_obj)                
+
+                # camera look at object
+                print('look at', object_name)
+                env.robot.look_at_point(RT_obj[:3, 3])       
                                             
                 # render image and compute sdf cost field
                 rgba, depth, mask, cam_pose, intrinsic_matrix = env.get_observation()
@@ -258,12 +270,6 @@ if __name__ == '__main__':
 
                 # load grasps
                 RT_grasps = env.RT_grasps[object_name]
-
-                # query object pose in world
-                pos, orn = env.get_object_pose(object_name)
-                obj_pose = list(pos) + [orn[3], orn[0], orn[1], orn[2]]
-                RT_obj = unpack_pose(obj_pose)
-                print(object_name, RT_obj)
 
                 # transform grasps to robot base
                 print('start checking collision of grasps')
