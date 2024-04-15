@@ -43,7 +43,7 @@ class GTORobotModel(RobotModel):
         self.surface_pc_map = self.compute_link_surface_points()
         self.visual_tf = self.setup_fk_functions()
         self.field_margin = 0.4
-        self.grid_resolution = 0.05
+        self.grid_resolution = 0.05     
         
 
     def get_standoff_pose(self, offset, axis):

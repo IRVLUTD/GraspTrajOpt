@@ -10,12 +10,23 @@ cwd = pathlib.Path(__file__).parent.resolve()  # path to current working directo
 sys.path.append(os.path.join(cwd, ".."))
 import optas
 from optas.visualize import Visualizer
+from gto.gto_models import GTORobotModel
+from gto.utils import *
+from pybullet_scenereplica import load_grasps
+from transforms3d.quaternions import quat2mat, mat2quat
 
 
 def make_args():
     parser = argparse.ArgumentParser(
         description="Generate grid and spawn objects", add_help=True
     )
+    parser.add_argument(
+        "-r",
+        "--robot",
+        type=str,
+        default="fetch",
+        help="Robot name",
+    )        
     parser.add_argument(
         "-d",
         "--data_dir",
@@ -38,7 +49,8 @@ if __name__ == "__main__":
     args = make_args()
     data_dir = args.data_dir
     scene_id = args.scene_id
-    model_dir = os.path.join(args.data_dir, "models")
+    robot_name = args.robot
+    model_dir = os.path.join(args.data_dir, "objects")
     grasp_dir = os.path.join(args.data_dir, "grasp_data", "refined_grasps")
     scenes_path = os.path.join(args.data_dir, "final_scenes", "scene_data")
 
@@ -46,7 +58,7 @@ if __name__ == "__main__":
     vis.grid_floor()
 
     # table model
-    filename = os.path.join(cwd, 'objects', 'cafe_table', 'cafe_table.obj')
+    filename = os.path.join(cwd, '../data/objects', 'cafe_table', 'cafe_table.obj')
     z_offset = -0.03  # difference between Real World and table CAD model
     table_position = [0.8, 0, z_offset]    
     vis.obj(
@@ -57,10 +69,27 @@ if __name__ == "__main__":
         euler_degrees=True,
     )
 
+    # load config file
+    root_dir = get_root_dir()
+    config_file = os.path.join(root_dir, 'data', 'configs', f'{robot_name}.yaml')
+    if not os.path.exists(config_file):
+        print(f'robot {robot_name} not supported', config_file)
+        sys.exit(1) 
+    cfg = load_yaml(config_file)['robot_cfg']
+    print(cfg)    
+    
     # load robot model
-    urdf_filename = os.path.join(cwd, "robots", "fetch", "fetch.urdf")
-    print(urdf_filename)
-    robot_model = optas.RobotModel(urdf_filename=urdf_filename) 
+    robot_model_dir = os.path.join(root_dir, 'data', 'robots', cfg['robot_name'])
+    urdf_filename = os.path.join(root_dir, cfg['urdf_robot_path']) 
+    robot_model = GTORobotModel(robot_model_dir,
+                          urdf_filename=urdf_filename, 
+                          time_derivs=[0, 1],  # i.e. joint position/velocity trajectory
+                          param_joints=cfg['param_joints'],
+                          collision_link_names=cfg['collision_link_names'])
+    
+    # load robot gripper model
+    urdf_filename_gripper = os.path.join(root_dir, cfg['urdf_gripper_path'])
+    gripper_model = GTORobotModel(robot_model_dir, urdf_filename=urdf_filename_gripper)    
 
     print(robot_model.actuated_joint_names)
     q = default_pose(robot_model)
@@ -94,6 +123,30 @@ if __name__ == "__main__":
             euler_degrees=False,
         )
         print(obj, position, orientation)
+
+        # show grasp
+        RT_grasps = load_grasps(data_dir, robot_name, obj)
+        RT_obj = np.eye(4)
+        RT_obj[:3, :3] = quat2mat(quat)
+        RT_obj[:3, 3] = position
+        RT_grasps_world = np.matmul(RT_obj, RT_grasps)
+        n = RT_grasps_world.shape[0]
+        index = np.random.choice(n, 3)
+
+        q = [0.05, 0.05]
+        for j in index:
+            RT = RT_grasps_world[j]
+            position = RT[:3, 3]
+            # scalar-last (x, y, z, w) format in optas
+            quat = mat2quat(RT[:3, :3])
+            orientation = [quat[1], quat[2], quat[3], quat[0]]
+            vis.robot(
+                gripper_model,
+                base_position=position,
+                base_orientation=orientation,
+                q=q,
+                alpha = 0.3,
+            )          
 
     save = False
     if save:
