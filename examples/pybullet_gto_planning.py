@@ -162,7 +162,7 @@ if __name__ == '__main__':
             results = {}
             set_objects = set(object_order)
             for object_name in object_order:
-                # if object_name != '003_cracker_box':
+                # if object_name != '040_large_marker':
                 #     env.reset_objects(object_name)
                 #     set_objects.remove(object_name)
                 #     continue

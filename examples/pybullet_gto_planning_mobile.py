@@ -108,6 +108,9 @@ if __name__ == '__main__':
 
     # create the table environment
     env = SceneReplicaEnv(urdf_filename, data_dir, robot_name, scene_type, mobile=True)
+    dyn = p.getDynamicsInfo(env.robot._id, -1)
+    mass = dyn[0]
+    print('base link mass', mass)
 
     # Initialize planner
     print('Initialize planner')
@@ -176,6 +179,7 @@ if __name__ == '__main__':
 
             # plan base location until no collision
             num = 2   # sample num grasps for each object
+            base_planner.setup_optimization(num * len(object_order))
             while 1:
                 grasps = []
                 for object_name in object_order:
@@ -222,12 +226,22 @@ if __name__ == '__main__':
             # rotate robot
             env.robot.move_to_theta(yaw)
             env.robot.look_at(pan=0, tilt=50)
+
+            # fix base
+            pos, orn = env.get_robot_pose()
+            RT_base = np.eye(4)
+            quat = [orn[3], orn[0], orn[1], orn[2]]   #w, x, y, z
+            RT_base[:3, :3] = quat2mat(quat)
+            RT_base[:3, 3] = pos            
+            RT_base_new = RT_base.copy()
+            env.set_robot_pose(pos, orn)
+            p.changeDynamics(env.robot._id, -1, mass=0)        
             
             # for each object
-            results = {}
+            results = {'RT_base_new': RT_base_new.tolist()}
             set_objects = set(object_order)
             for object_name in object_order:
-                # if object_name != '040_large_marker':
+                # if object_name != '005_tomato_soup_can':
                 #     env.reset_objects(object_name)
                 #     set_objects.remove(object_name)
                 #     continue
@@ -247,11 +261,14 @@ if __name__ == '__main__':
                 # camera look at object
                 print('look at', object_name)
                 env.robot.look_at_point(RT_obj[:3, 3])       
-                                            
+
                 # render image and compute sdf cost field
                 rgba, depth, mask, cam_pose, intrinsic_matrix = env.get_observation()
                 idx = env.object_uids[env.object_names.index(object_name)]
                 target_mask = mask == idx
+
+                # mask robot depth
+                depth[mask == 1] = cfg['depth_threshold']
 
                 # get robot base pose
                 pos, orn = env.get_robot_pose()
@@ -401,6 +418,8 @@ if __name__ == '__main__':
                                          'ik_time': ik_time, 'planning_time': planning_time}
 
             results_ordering[ordering] = results
+            # unfix base
+            p.changeDynamics(env.robot._id, -1, mass=mass)                
         results_scene[f'{scene_id}'] = results_ordering                
 
     print('total success', total_success)
@@ -410,6 +429,7 @@ if __name__ == '__main__':
         os.mkdir(outdir)
     curr_time = datetime.datetime.now()
     exp_time = "{:%y-%m-%d_T%H%M%S}".format(curr_time)        
-    filename = os.path.join(outdir, f'GTO_scenereplica_{robot_name}_{scene_type}_{exp_time}.json')
+    filename = os.path.join(outdir, f'GTO_scenereplica_mobile_{robot_name}_{scene_type}_{exp_time}.json')
+    print(filename)
     with open(filename, "w") as outfile: 
         json.dump(results_scene, outfile)

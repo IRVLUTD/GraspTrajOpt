@@ -95,7 +95,6 @@ class BasePlanner:
 
     def plan_goalset(self, qc, RTs):
         n = RTs.shape[0]
-        self.setup_optimization(goal_size=n)
         tf_goal = np.zeros((16, n))
         for i in range(n):
             RT = RTs[i]

@@ -185,7 +185,7 @@ class FixedBaseRobot:
             qj = q[j]
             p.resetJointState(self._id, idx, qj)           
 
-    def cmd(self, q):
+    def cmd(self, q): 
         p.setJointMotorControlArray(
             self._id,
             self._actuated_joints,
@@ -260,9 +260,9 @@ class FixedBaseRobot:
 
 
 class Panda(FixedBaseRobot):
-    def __init__(self, urdf_filename, base_position=[0.0] * 3, scene_type='tabletop'):
+    def __init__(self, urdf_filename, base_position=[0.0] * 3, scene_type='tabletop', fix_base=1):
         self.urdf_filename = urdf_filename
-        super().__init__(urdf_filename, base_position=base_position)
+        super().__init__(urdf_filename, base_position=base_position, fix_base=fix_base)
         self.ee_index = 7
         self.camera_link_index = 10
         self.gripper_open_offsets = [0.04, 0.04]
