@@ -108,6 +108,11 @@ class IKSolver:
         print('rotation error in degree', err_rot)
         print('collision cost', cost)
         return q.toarray().flatten(), err_pos, err_rot, cost
+    
+
+    # forward kinematics
+    def solve_fk(self, q_0):
+        return self.fk(q_0).toarray()
 
 
 def make_args():
@@ -142,7 +147,7 @@ if __name__ == "__main__":
     model_dir = os.path.join(root_dir, 'data', 'robots', cfg['robot_name'])
     urdf_filename = os.path.join(root_dir, cfg['urdf_robot_path']) 
 
-    if robot_name == 'fetch':
+    if 'fetch' in robot_name:
         RT = np.array([[-0.05241979, -0.45344928, -0.88973933,  0.41363978],
             [-0.27383122, -0.8502871,   0.44947574,  0.12551154],
             [-0.96034825,  0.26719978, -0.07959669,  0.97476065],
@@ -167,7 +172,7 @@ if __name__ == "__main__":
     ik_solver = IKSolver(robot, cfg['link_ee'], cfg['link_gripper'])
     ik_solver.setup_optimization()
     q_0 = np.zeros((robot.ndof, 1), dtype=np.float32)
-    if robot_name == 'fetch':
+    if 'fetch' in robot_name:
         q_0[2, 0] = 0.38
         q_0[3, 0] = 0.009195
         q_0[4, 0] = 0.908270
@@ -197,7 +202,7 @@ if __name__ == "__main__":
         gripper_model,
         base_position=position,
         base_orientation=orientation,
-        q=q
+        q=q,
     )
     # robot
     vis.robot(
@@ -206,6 +211,6 @@ if __name__ == "__main__":
         base_orientation=[0, 0, 0],
         euler_degrees=True,
         q=q_solution,
-        alpha=0.1,
+        alpha=0.4,
     )
     vis.start()

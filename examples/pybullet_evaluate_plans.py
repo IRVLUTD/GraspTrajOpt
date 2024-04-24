@@ -9,7 +9,7 @@ import _init_paths
 from mesh_to_sdf.depth_point_cloud import DepthPointCloud
 from gto.gto_models import GTORobotModel
 from gto.utils import *
-    
+from transforms3d.quaternions import mat2quat
 
 
 def make_args():
@@ -52,6 +52,7 @@ def make_args():
         help="SceneReplica scene id",
     )
     parser.add_argument("-v", "--vis", help="renders", action="store_true")
+    parser.add_argument("-m", "--mobile", help="mobile manipulation", action="store_true")
     args = parser.parse_args()
     return args
         
@@ -64,8 +65,11 @@ if __name__ == '__main__':
     scene_id = args.scene_id
     filename = args.file
     scene_type = args.scene_type
+    is_mobile = args.mobile
     assert robot_name in filename, f"result file {filename} is not for robot {robot_name}"
     assert scene_type in filename, f"result file {filename} is not for scene type {scene_type}"
+    if is_mobile:
+        assert 'mobile' in filename, f"result file {filename} is not for mobile manipulation"
 
     if scene_type == 'tabletop':
         orderings = ["nearest_first", "random"]
@@ -94,7 +98,10 @@ if __name__ == '__main__':
                           collision_link_names=cfg['collision_link_names'])
 
     # create the table environment
-    env = SceneReplicaEnv(data_dir, robot_name, scene_type)
+    env = SceneReplicaEnv(urdf_filename, data_dir, robot_name, scene_type, mobile=is_mobile)
+    dyn = p.getDynamicsInfo(env.robot._id, -1)
+    mass = dyn[0]
+    print('base link mass', mass)    
 
     # load results
     with open(filename, "r") as outfile: 
@@ -119,7 +126,10 @@ if __name__ == '__main__':
     total_collision = 0
 
     # main loop
-    all_scene_ids = env.all_scene_ids
+    if scene_id == -1:
+        all_scene_ids = env.all_scene_ids
+    else:
+        all_scene_ids = [scene_id]
     for scene_id in all_scene_ids:
         print(f'=====================Scene {scene_id}========================')
         meta = env.setup_scene(scene_id)
@@ -132,8 +142,24 @@ if __name__ == '__main__':
             
             # for each object
             results = results_ordering[ordering]
+
+            if is_mobile:
+                RT_base_new = np.array(results['RT_base_new']).reshape((4, 4))
+                # set base
+                pos = RT_base_new[:3, 3]
+                quat = mat2quat(RT_base_new[:3, :3])
+                orn = [quat[1], quat[2], quat[3], quat[0]]
+                env.set_robot_pose(pos, orn)
+                # fix base
+                p.changeDynamics(env.robot._id, -1, mass=0)   
+
             set_objects = set(object_order)
             for object_name in object_order:
+                # if object_name != '005_tomato_soup_can':
+                #     env.reset_objects(object_name)
+                #     set_objects.remove(object_name)
+                #     continue
+
                 reward = results[object_name]['reward']
                 plan = results[object_name]['plan']
                 total_success += reward
@@ -157,13 +183,38 @@ if __name__ == '__main__':
                 
                 # reset scene
                 env.reset_scene(set_objects)
+
+                if is_mobile:
+                    # query object pose in world
+                    pos, orn = env.get_object_pose(object_name)
+                    obj_pose = list(pos) + [orn[3], orn[0], orn[1], orn[2]]
+                    RT_obj = unpack_pose(obj_pose)      
+                    # camera look at object
+                    env.robot.look_at_point(RT_obj[:3, 3])                  
                                             
                 # render image and compute sdf cost field
                 rgba, depth, mask, cam_pose, intrinsic_matrix = env.get_observation()
                 idx = env.object_uids[env.object_names.index(object_name)]
                 target_mask = mask == idx
                 depth[target_mask] = 2.0
-                depth_pc = DepthPointCloud(depth, intrinsic_matrix, cam_pose, target_mask)
+                if is_mobile:
+                    # mask robot depth
+                    depth[mask == 1] = 2.0
+
+                if is_mobile:
+                    # get robot base pose
+                    pos, orn = env.get_robot_pose()
+                    RT_base = np.eye(4)
+                    quat = [orn[3], orn[0], orn[1], orn[2]]   #w, x, y, z
+                    RT_base[:3, :3] = quat2mat(quat)
+                    RT_base[:3, 3] = pos
+                    # convert camera pose from world to base
+                    cam_pose = np.linalg.inv(RT_base) @ cam_pose                    
+
+                depth_pc = DepthPointCloud(depth, intrinsic_matrix, cam_pose, target_mask, threshold=cfg['depth_threshold'])
+
+                if args.vis:
+                    robot.setup_points_field(depth_pc.points)
 
                 # check if the robot plan is in collision
                 in_collision = False
@@ -172,11 +223,17 @@ if __name__ == '__main__':
                     for i in range(plan.shape[1]):
                         q = plan[:, i]
                         points_base, _ = robot.compute_fk_surface_points(q)
-                        points_world = points_base + env.base_position.reshape((1, 3))
+                        if is_mobile:
+                            points_world = points_base.copy()
+                        else:
+                            points_world = points_base + env.base_position.reshape((1, 3))
                         sdf = depth_pc.get_sdf(points_world)
                         # at least 5 body points in collision
                         if np.sum(sdf < 0) > 5:
                             in_collision = True
+                            if args.vis:
+                                print('step', i)
+                                visualize_pose(robot, [0, 0, 0], q, depth_pc)
                             break
                 total_collision += int(in_collision)
                 object_collision[object_name] += int(in_collision)
@@ -184,6 +241,9 @@ if __name__ == '__main__':
                 print(f'{object_name}, success {reward}, collision {int(in_collision)}')
                 set_objects.remove(object_name)
                 env.reset_objects(object_name)
+
+            if is_mobile:
+                p.changeDynamics(env.robot._id, -1, mass=mass)
 
     # print output
     print(f'-----------------{scene_type} scenes, {robot_name} robot------------------')

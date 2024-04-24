@@ -7,6 +7,8 @@ import pybullet as p
 import pybullet_data
 import numpy as np
 from utils import *
+from move_to_pose import angle_mod, PathFinderController
+
 
 cwd = pathlib.Path(__file__).parent.resolve()  # path to current working directory
 
@@ -44,10 +46,10 @@ class PyBullet:
         self,
         dt,
         add_floor=True,
-        camera_distance=1.5,
+        camera_distance=2.5,
         camera_yaw=45,
         camera_pitch=-40,
-        camera_target_position=[0, 0, 0.5],
+        camera_target_position=[1.0, 0, 0.5],
         record_video=False,
         gui=True,
     ):
@@ -74,6 +76,7 @@ class PyBullet:
         )
         if add_floor:
             self.add_floor()
+        pybullet_show_frame(np.eye(4))
 
     def add_floor(self, base_position=[0.0] * 3):
         colid = p.createCollisionShape(p.GEOM_PLANE)
@@ -154,9 +157,9 @@ class VisualBox:
         )
 
 class FixedBaseRobot:
-    def __init__(self, urdf_filename, base_position=[0.0] * 3):
+    def __init__(self, urdf_filename, base_position=[0.0] * 3, fix_base=1):
         self._id = p.loadURDF(
-            fileName=urdf_filename, useFixedBase=1, basePosition=base_position
+            fileName=urdf_filename, useFixedBase=fix_base, basePosition=base_position
         )
         self.num_joints = p.getNumJoints(self._id)
         self._actuated_joints = []
@@ -168,18 +171,21 @@ class FixedBaseRobot:
                 self._actuated_joints.append(j)
                 self._actuated_joint_names.append(info[1])
         self.ndof = len(self._actuated_joints)
+        print('robot ndof', self.ndof)
+        print(self._actuated_joint_names)
         self.robot = optas.RobotModel(urdf_filename, time_derivs=[0])
 
         self.position_control_gain_p = [0.01] * self.ndof
         self.position_control_gain_d = [1.0] * self.ndof
         self.max_torque = [1000] * self.ndof
+        self.wheels = []
 
     def reset(self, q):
         for j, idx in enumerate(self._actuated_joints):
             qj = q[j]
             p.resetJointState(self._id, idx, qj)           
 
-    def cmd(self, q):
+    def cmd(self, q): 
         p.setJointMotorControlArray(
             self._id,
             self._actuated_joints,
@@ -188,7 +194,14 @@ class FixedBaseRobot:
             forces=self.max_torque,
             positionGains=self.position_control_gain_p,
             velocityGains=self.position_control_gain_d,
-        )     
+        )
+        for wheel in self.wheels:
+            p.setJointMotorControl2(self._id,
+                            wheel,
+                            p.VELOCITY_CONTROL,
+                            targetVelocity=0,
+                            force=0)        
+        
 
     def cmd_torque(self, taus):
         for index in range(len(self._actuated_joints)):
@@ -207,16 +220,17 @@ class FixedBaseRobot:
     def default_pose(self):
         return np.zeros((self.ndof, ))
     
-    def execute_plan(self, plan):
+    def execute_plan(self, plan, num=None):
         '''
         @ param plan: shape (ndof, T)
         '''        
         for t in range(plan.shape[1]):
             self.cmd(plan[:, t])
-            if t >= plan.shape[1] - 5:
-                num = 500
-            else:
-                num = 200
+            if num is None:
+                if t >= plan.shape[1] - 5:
+                    num = 500
+                else:
+                    num = 200
             for _ in range(num):
                 p.stepSimulation()
 
@@ -243,14 +257,13 @@ class FixedBaseRobot:
             pose_standoff[2, 3] = offset
         else:
             print('unknow standoff axis', axis)
-        return pose_standoff                   
+        return pose_standoff         
 
 
 class Panda(FixedBaseRobot):
-    def __init__(self, base_position=[0.0] * 3, scene_type='tabletop'):
-        f = os.path.join(cwd, "../data/robots", "panda", "panda.urdf")
-        self.urdf_filename = f
-        super().__init__(f, base_position=base_position)
+    def __init__(self, urdf_filename, base_position=[0.0] * 3, scene_type='tabletop', fix_base=1):
+        self.urdf_filename = urdf_filename
+        super().__init__(urdf_filename, base_position=base_position, fix_base=fix_base)
         self.ee_index = 7
         self.camera_link_index = 10
         self.gripper_open_offsets = [0.04, 0.04]
@@ -294,15 +307,29 @@ class Panda(FixedBaseRobot):
     
 
 class Fetch(FixedBaseRobot):
-    def __init__(self, base_position=[0.0] * 3, scene_type='tabletop'):
-        f = os.path.join(cwd, "../data/robots", "fetch", "fetch.urdf")
-        self.urdf_filename = f
-        super().__init__(f, base_position=base_position)
+    def __init__(self, urdf_filename, base_position=[0.0] * 3, scene_type='tabletop', fix_base=1):
+        self.urdf_filename = urdf_filename
+        super().__init__(urdf_filename, base_position=base_position, fix_base=fix_base)
         self.ee_index = 16
         self.camera_link_index = 7
+        self.wheels = [0, 1]
         self.gripper_open_joints = [0.05, 0.05]
         self.finger_index = [12, 13]
         self.scene_type = scene_type
+        self.path_controller = PathFinderController(1, 1, 3)
+        self.MAX_LINEAR_SPEED = 0.1
+        self.MAX_ANGULAR_SPEED = 0.1
+        self.wheel_axle_halflength = self.wheel_axle_length / 2.0
+
+
+    @property
+    def wheel_radius(self):
+        return 0.0613
+
+    @property
+    def wheel_axle_length(self):
+        return 0.372                 
+        
 
     def default_pose(self):
         # set robot pose
@@ -331,6 +358,148 @@ class Fetch(FixedBaseRobot):
         joint_command[12] = 0.05
         joint_command[13] = 0.05        
         return joint_command
+    
+
+    # pan and tilt in degrees
+    def look_at(self, pan, tilt):
+        print('pan', pan, 'tilt', tilt)
+        q = self.q()
+        q[3] = pan * np.pi / 180
+        q[4] = tilt * np.pi / 180
+        self.cmd(q)
+        num = 200
+        for _ in range(num):
+            p.stepSimulation()
+
+    # point is in world
+    def look_at_point(self, point):
+        # camera pos
+        pos, orn = p.getLinkState(self._id, self.camera_link_index)[:2]
+        direction = (point - pos) / np.linalg.norm(point - pos)
+        z = np.array([0, 0, 1])
+        dot_product = np.dot(direction, z)
+        tilt = np.arccos(dot_product) - np.pi / 2
+        pan = np.arctan2(direction[1], direction[0])
+        self.look_at(pan * 180 / np.pi, tilt * 180 / np.pi)
+    
+
+    def get_base_pose(self):
+        pos, orn = p.getBasePositionAndOrientation(self._id)
+        euler = p.getEulerFromQuaternion(orn)
+        yaw = euler[2]
+        return pos[0], pos[1], yaw
+    
+
+    def write_video_frame(self, env, video_writer):
+        env.write_video_frame(video_writer)
+    
+
+    def move_to_xy(self, x_delta, y_delta, env=None, video_writer=None):
+        # global pose
+        x, y, theta = self.get_base_pose()
+        x_goal = x + x_delta
+        y_goal = y + y_delta
+
+        x_diff = x_goal - x
+        y_diff = y_goal - y
+
+        x_traj, y_traj = [], []
+        dt = 0.01
+
+        rho = np.hypot(x_diff, y_diff)
+        while rho > 0.01:
+            x_traj.append(x)
+            y_traj.append(y)
+
+            x_diff = x_goal - x
+            y_diff = y_goal - y
+
+            rho, v, w = self.path_controller.calc_control_xy(
+                x_diff, y_diff, theta)
+
+            if abs(v) > self.MAX_LINEAR_SPEED:
+                v = np.sign(v) * self.MAX_LINEAR_SPEED
+
+            if abs(w) > self.MAX_ANGULAR_SPEED:
+                w = np.sign(w) * self.MAX_ANGULAR_SPEED
+            print('linear velocity', v, 'angular velocity', w)
+
+            if video_writer is not None:
+                self.write_video_frame(env, video_writer)
+
+            # send command to robot
+            right_wheel_joint_vel, left_wheel_joint_vel = self.command_to_control([v, w])
+            self.cmd_wheel_velocities([right_wheel_joint_vel, left_wheel_joint_vel])
+            time.sleep(dt)
+
+            # get pose
+            x, y, theta = self.get_base_pose()
+        self.cmd_wheel_velocities([0, 0])
+
+
+    def move_to_theta(self, theta_delta, env=None, video_writer=None):
+        # global pose
+        x, y, theta = self.get_base_pose()
+        theta_goal = theta + theta_delta
+        dt = 0.01
+        beta = angle_mod(theta_goal - theta)
+        print(theta, theta_goal, theta_delta, beta)
+        while np.absolute(beta) > 0.02:
+            v, w = self.path_controller.calc_control_theta(theta, theta_goal)
+
+            if abs(v) > self.MAX_LINEAR_SPEED:
+                v = np.sign(v) * self.MAX_LINEAR_SPEED
+
+            if abs(w) > self.MAX_ANGULAR_SPEED:
+                w = np.sign(w) * self.MAX_ANGULAR_SPEED
+            print('linear velocity', v, 'angular velocity', w)
+
+            if video_writer is not None:
+                self.write_video_frame(env, video_writer)            
+
+            # send command to robot
+            right_wheel_joint_vel, left_wheel_joint_vel = self.command_to_control([v, w])
+            self.cmd_wheel_velocities([right_wheel_joint_vel, left_wheel_joint_vel])
+            time.sleep(dt)
+
+            # get pose
+            x, y, theta = self.get_base_pose()
+            beta = angle_mod(theta_goal - theta)
+        self.cmd_wheel_velocities([0, 0])        
+
+
+    def command_to_control(self, command):
+        """
+        Converts the (already preprocessed) inputted @command into deployable (non-clipped!) joint control signal.
+        This processes converts the desired (lin_vel, ang_vel) command into (left, right) wheel joint velocity control
+        signals.
+
+        :param command: Array[float], desired (already preprocessed) 2D command to convert into control signals
+            Consists of desired (lin_vel, ang_vel) of the controlled body
+        :param control_dict: Dict[str, Any], dictionary that should include any relevant keyword-mapped
+            states necessary for controller computation. Must include the following keys:
+
+        :return: Array[float], outputted (non-clipped!) velocity control signal to deploy
+            to the [left, right] wheel joints
+        """
+        lin_vel, ang_vel = command
+
+        # Convert to wheel velocities
+        left_wheel_joint_vel = (lin_vel - ang_vel * self.wheel_axle_halflength) / self.wheel_radius
+        right_wheel_joint_vel = (lin_vel + ang_vel * self.wheel_axle_halflength) / self.wheel_radius
+
+        # Return desired velocities
+        return np.array([right_wheel_joint_vel, left_wheel_joint_vel])    
+    
+
+    def cmd_wheel_velocities(self, velocities):
+        for i, wheel in enumerate(self.wheels):
+            p.setJointMotorControl2(self._id,
+                            wheel,
+                            p.VELOCITY_CONTROL,
+                            targetVelocity=velocities[i],
+                            force=5)
+
     
     def get_camera_pose(self):
         pos, orn = p.getLinkState(self._id, self.camera_link_index)[:2]
@@ -416,7 +585,9 @@ def main(gui=True):
     # robot = KukaLBR()
     # robot = R2D2([0, 0, 0.5])
     # robot = Nextage()
-    robot = Fetch()
+    urdf_filename = '../data/robots/fetch/fetch.urdf'
+    robot = Fetch(urdf_filename, fix_base=False)
+    robot.retract()
 
     q0 = np.zeros(robot.ndof)
     qF = np.random.uniform(-np.pi, np.pi, size=(robot.ndof,))
@@ -424,6 +595,9 @@ def main(gui=True):
     alpha = 0.0
 
     pb.start()
+    robot.move_to_xy(x_delta=1.0, y_delta=2.0)
+    robot.move_to_theta(90*np.pi / 180)
+    input('next?')
 
     while alpha < 1.0:
         q = (1.0 - alpha) * q0 + alpha * qF

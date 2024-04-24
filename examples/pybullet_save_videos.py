@@ -6,6 +6,8 @@ import argparse
 import json
 import time
 from pybullet_scenereplica import SceneReplicaEnv
+from pybullet_api import pybullet_show_frame
+from transforms3d.quaternions import mat2quat
 from utils import *
 import _init_paths
 from gto.gto_models import GTORobotModel
@@ -52,6 +54,7 @@ def make_args():
         help="SceneReplica scene id",
     )
     parser.add_argument("-v", "--vis", help="renders", action="store_true")
+    parser.add_argument("-m", "--mobile", help="mobile manipulation", action="store_true")
     args = parser.parse_args()
     return args
         
@@ -64,8 +67,11 @@ if __name__ == '__main__':
     scene_id = args.scene_id
     filename = args.file
     scene_type = args.scene_type
+    is_mobile = args.mobile
     assert robot_name in filename, f"result file {filename} is not for robot {robot_name}"
     assert scene_type in filename, f"result file {filename} is not for scene type {scene_type}"
+    if is_mobile:
+        assert 'mobile' in filename, f"result file {filename} is not for mobile manipulation"    
 
     if scene_type == 'tabletop':
         orderings = ["nearest_first", "random"]
@@ -96,7 +102,10 @@ if __name__ == '__main__':
                           collision_link_names=cfg['collision_link_names'])
 
     # create the table environment
-    env = SceneReplicaEnv(data_dir, robot_name, scene_type)
+    env = SceneReplicaEnv(urdf_filename, data_dir, robot_name, scene_type, mobile=is_mobile)
+    dyn = p.getDynamicsInfo(env.robot._id, -1)
+    mass = dyn[0]
+    print('base link mass', mass)    
 
     # load results
     with open(filename, "r") as outfile: 
@@ -110,8 +119,6 @@ if __name__ == '__main__':
     # main loop
     all_scene_ids = env.all_scene_ids
     for scene_id in all_scene_ids:
-        print(f'=====================Scene {scene_id}========================')
-        meta = env.setup_scene(scene_id)
 
         output_video_name = f"videos/{os.path.basename(filename)}_{scene_id}.mp4"
         print('write video to', output_video_name)
@@ -125,15 +132,87 @@ if __name__ == '__main__':
         # two orderings
         results_ordering = results_scene[f'{scene_id}']
         for ordering in orderings:
+            print(f'=====================Scene {scene_id}========================')
+            meta = env.setup_scene(scene_id)
+
             object_order = meta[ordering][0].split(",")
             print(ordering, object_order)
             
             # for each object
             results = results_ordering[ordering]
+
+            if is_mobile:
+                # update camera view
+                if env.scene_type == 'tabletop':
+                    env.distance = 4.0
+                else:
+                    env.distance = 4.5
+                env.update_view_matrix()
+
+                # move robot base
+                # get robot base pose
+                pos, orn = env.get_robot_pose()
+                RT_base = np.eye(4)
+                quat = [orn[3], orn[0], orn[1], orn[2]]   #w, x, y, z
+                RT_base[:3, :3] = quat2mat(quat)
+                RT_base[:3, 3] = pos
+
+                # new base
+                RT_base_new = np.array(results['RT_base_new']).reshape((4, 4))
+
+                # RT_base_new = RT_base @ RT_base_delta
+                RT_base_delta = np.linalg.inv(RT_base) @ RT_base_new
+                pybullet_show_frame(RT_base_new)
+
+                # move base
+                x_delta = RT_base_delta[0, 3]
+                y_delta = RT_base_delta[1, 3]
+                env.robot.move_to_xy(x_delta, y_delta, env, video_writer)
+
+                # get new robot base pose
+                pos, orn = env.get_robot_pose()
+                RT_base = np.eye(4)
+                quat = [orn[3], orn[0], orn[1], orn[2]]   #w, x, y, z
+                RT_base[:3, :3] = quat2mat(quat)
+                RT_base[:3, 3] = pos
+                delta = np.linalg.inv(RT_base) @ RT_base_new
+                quat = mat2quat(delta[:3, :3])
+                orn = [quat[1], quat[2], quat[3], quat[0]]
+                euler = p.getEulerFromQuaternion(orn)
+                yaw = euler[2]            
+
+                # rotate robot
+                env.robot.move_to_theta(yaw, env, video_writer)
+
+                # fix base
+                pos, orn = env.get_robot_pose()
+                RT_base = np.eye(4)
+                quat = [orn[3], orn[0], orn[1], orn[2]]   #w, x, y, z
+                RT_base[:3, :3] = quat2mat(quat)
+                RT_base[:3, 3] = pos            
+                RT_base_new = RT_base.copy()
+                env.set_robot_pose(pos, orn)
+                p.changeDynamics(env.robot._id, -1, mass=0)
+
+                # update camera view
+                if env.scene_type == 'tabletop':
+                    env.distance = 1.8
+                else:
+                    env.distance = 1.6
+                env.update_view_matrix()
+
             set_objects = set(object_order)
             for object_name in object_order:
                 # reset scene
                 env.reset_scene(set_objects)
+
+                if is_mobile:
+                    # query object pose in world
+                    pos, orn = env.get_object_pose(object_name)
+                    obj_pose = list(pos) + [orn[3], orn[0], orn[1], orn[2]]
+                    RT_obj = unpack_pose(obj_pose)      
+                    # camera look at object
+                    env.robot.look_at_point(RT_obj[:3, 3])                
                                             
                 plan = results[object_name]['plan']
                 if plan is None:
@@ -157,4 +236,8 @@ if __name__ == '__main__':
                 set_objects.remove(object_name)
                 env.reset_objects(object_name)
                 env.robot.retract()
+
+            if is_mobile:
+                p.changeDynamics(env.robot._id, -1, mass=mass)
+
         video_writer.release()

@@ -1,0 +1,289 @@
+import os
+import sys
+import pathlib
+import numpy as np
+import argparse
+import _init_paths
+
+# OpTaS
+import optas
+import casadi as cs
+from optas.visualize import Visualizer
+from optas.spatialmath import rotz, rt2tr
+from optas.models import TaskModel
+from gto.gto_models import GTORobotModel
+from gto.utils import load_yaml, get_root_dir, rotZ
+from transforms3d.quaternions import mat2quat
+
+
+class BasePlanner:
+    def __init__(self, robot, link_ee, link_gripper):
+
+        # setup task model (x, y, theta)
+        self.task = TaskModel('base_pose_estimator', dim=3)
+        self.task_name = self.task.name
+
+        # Setup robot
+        self.robot = robot
+        self.robot_name = robot.get_name()
+        self.link_ee = link_ee
+        self.link_gripper = link_gripper
+        self.gripper_points = robot.surface_pc_map[link_gripper].points
+        self.gripper_tf = robot.get_link_transform_function(link=link_gripper, base_link=link_ee)
+
+
+    def setup_optimization(self, goal_size=1, base_effort_weight=0.01):
+        # Setup optimization builder
+        builder = optas.OptimizationBuilder(T=goal_size, robots=[self.robot], tasks=[self.task])
+
+        # Setup parameters
+        # tf goals are grasps in the current robot base pose
+        tf_goal = builder.add_parameter("tf_goal", 16, goal_size)   
+
+        # get optimized robot base
+        q = builder.get_model_states(self.task_name)[:, 0]
+        print('q', q.shape)
+        x = q[0]
+        y = q[1]
+        theta = q[2]
+        R = rotz(theta)
+        t = cs.horzcat(x, y, 0.0)
+        tf_base = rt2tr(R, t)
+        # tf base is RT_b'b, old base in new base
+
+        # constraint for theta
+        builder.add_bound_inequality_constraint("theta_bound", -np.pi, theta, np.pi)
+
+        # penalize movement
+        builder.add_cost_term("cost_effort", base_effort_weight * optas.sumsqr(q))
+
+        # Get joint trajectory
+        Q = builder.get_robot_states_and_parameters(
+            self.robot_name
+        )  # ndof-by-T symbolic array for robot trajectory
+
+        # forward kinematics for link gripper
+        self.fk = self.robot.get_global_link_transform_function(self.link_gripper, n=goal_size)
+        # trajectory for end-effector (FK) in robot base
+        tf_gripper = self.fk(Q)
+
+        # Cost: reach goal pose, cost in new base
+        if goal_size == 1:
+            points_tf = tf_gripper[:3, :3] @ self.gripper_points.T + tf_gripper[:3, 3].reshape((3, 1))
+            tf_g = tf_goal[:, 0].reshape((4, 4)).T
+            tf_gripper_goal = tf_base @ tf_g @ self.gripper_tf(Q[:, 0])
+            points_tf_goal = tf_gripper_goal[:3, :3] @ self.gripper_points.T + tf_gripper_goal[:3, 3].reshape((3, 1))
+            builder.add_cost_term("cost_pos", optas.sumsqr(points_tf - points_tf_goal))
+        else:
+            cost = cs.MX.zeros(goal_size)
+            for i in range(goal_size):
+                tf = tf_gripper[i]
+                points_tf = tf[:3, :3] @ self.gripper_points.T + tf[:3, 3].reshape((3, 1))
+                tf_g = tf_goal[:, i].reshape((4, 4)).T
+                tf_gripper_goal = tf_base @ tf_g @ self.gripper_tf(Q[:, i])
+                points_tf_goal = tf_gripper_goal[:3, :3] @ self.gripper_points.T + tf_gripper_goal[:3, 3].reshape((3, 1))
+                cost[i] = optas.sumsqr(points_tf - points_tf_goal)
+            builder.add_cost_term("cost_pos", optas.sum1(cost))
+
+        # Constraint: joint position limits
+        builder.enforce_model_limits(self.robot_name)  # joint limits extracted from URDF        
+
+        # Setup solver
+        solver_options = {'ipopt': {'max_iter': 100, 'tol': 1e-15}}
+        self.solver = optas.CasADiSolver(builder.build()).setup("ipopt", solver_options=solver_options)
+    
+
+    def plan_goalset(self, qc, RTs):
+        n = RTs.shape[0]
+        tf_goal = np.zeros((16, n))
+        for i in range(n):
+            RT = RTs[i]
+            tf_goal[:, i] = RT.flatten()
+
+        Q0 = optas.diag(qc) @ optas.DM.ones(self.robot.ndof, n)
+        x0 = np.zeros((3, n), dtype=np.float32)
+
+        # Set initial seed
+        self.solver.reset_initial_seed(
+            {
+                f"{self.robot_name}/q/x": self.robot.extract_optimized_dimensions(Q0),
+                f"{self.task_name}/y/x": x0
+            }
+        )
+
+        # Set parameters
+        self.solver.reset_parameters(
+            {
+                "tf_goal": optas.DM(tf_goal),
+                f"{self.robot_name}/q/p": self.robot.extract_parameter_dimensions(Q0),
+            }
+        )
+
+        # Solve problem
+        solution = self.solver.solve()
+
+        # Get robot configuration
+        Q = solution[f"{self.robot_name}/q"]
+        y = solution[f"{self.task_name}/y"][:, 0].toarray().flatten()
+
+        # compute errors
+        RT_base = rotZ(y[2])
+        RT_base[0, 3] = y[0]
+        RT_base[1, 3] = y[1]
+        RT_base_inv = np.linalg.inv(RT_base)
+        tf_gripper = self.fk(Q)
+        err_pos = np.zeros((n, ), dtype=np.float32)
+        err_rot = np.zeros((n, ), dtype=np.float32)
+        for i in range(n):
+            RT = RT_base @ RTs[i] @ self.gripper_tf(Q[:, i])
+            RT = RT.toarray()
+            tf = tf_gripper[i].toarray()    # new base  
+            err_pos[i] = np.linalg.norm(RT[:3, 3] - tf[:3, 3])
+            quat1 = mat2quat(RT[:3, :3])
+            quat2 = mat2quat(tf[:3, :3])
+            err_rot[i] = np.arccos(np.clip(2 * np.square(np.dot(quat1, quat2)) - 1, -1, 1)) * 180 / np.pi
+            print('grasp', i)
+            print('position error', err_pos[i])
+            print('rotation error in degree', err_rot[i])
+
+        # compute collision cost
+        points_world_all = None
+        for name in self.robot.surface_pc_map.keys():              
+            tf = RT_base_inv @ self.robot.visual_tf[name](qc)
+            points = self.robot.surface_pc_map[name].points
+            points_world = tf[:3, :3] @ points.T + tf[:3, 3].reshape((3, 1))
+            if points_world_all is None:
+                points_world_all = points_world
+            else:
+                points_world_all = np.concatenate((points_world_all, points_world), axis=1)
+        points_world_all = points_world_all.T
+        print(points_world_all.shape)
+        offsets = self.robot.points_to_offsets_occupancy_numpy(points_world_all)
+        cost = np.sum(self.robot.occupancy_grid[offsets])
+        print('collision cost', cost)
+
+        print("***********************************") 
+        print("Casadi robot base pose solution:")
+        print(y, y.shape)
+        return Q.toarray(), y, err_pos, err_rot, cost
+    
+
+    # visualize the solution
+    def visualize(self, robot, gripper, qc, RTs, RT_base):
+        # visualization
+        vis = Visualizer(camera_position=[3, 0, 3])
+        vis.grid_floor()      
+
+        q = [0.05, 0.05]
+        n = RTs.shape[0]
+        for i in range(n):
+            position = RTs[i, :3, 3]
+            # scalar-last (x, y, z, w) format in optas
+            quat = mat2quat(RTs[i, :3, :3])
+            orientation = [quat[1], quat[2], quat[3], quat[0]]
+            # gripper
+            vis.robot(
+                gripper,
+                base_position=position,
+                base_orientation=orientation,
+                q=q
+            )
+        # robot
+        vis.robot(
+            robot,
+            base_position=[0.0, 0, 0],
+            base_orientation=[0, 0, 0],
+            euler_degrees=True,
+            q=qc,
+            alpha=0.4,
+        )
+        # new base
+        position = RT_base[:3, 3]
+        # scalar-last (x, y, z, w) format in optas
+        quat = mat2quat(RT_base[:3, :3])
+        orientation = [quat[1], quat[2], quat[3], quat[0]]    
+        vis.robot(
+            robot,
+            base_position=position,
+            base_orientation=orientation,
+            q=qc,
+            alpha=0.4,
+        )    
+        vis.start()        
+
+
+def make_args():
+    parser = argparse.ArgumentParser(
+        description="Generate grid and spawn objects", add_help=True
+    )
+    parser.add_argument(
+        "-r",
+        "--robot",
+        type=str,
+        default="fetch",
+        help="Robot name",
+    )
+    args = parser.parse_args()
+    return args
+
+
+if __name__ == "__main__":
+    args = make_args()
+    robot_name = args.robot
+    
+    # load config file
+    root_dir = get_root_dir()
+    config_file = os.path.join(root_dir, 'data', 'configs', f'{robot_name}.yaml')
+    if not os.path.exists(config_file):
+        print(f'robot {robot_name} not supported', config_file)
+        sys.exit(1) 
+    cfg = load_yaml(config_file)['robot_cfg']
+    print(cfg)
+
+    if 'fetch' in robot_name:
+        RT = np.array([[-0.05241979, -0.45344928, -0.88973933,  0.41363978],
+            [-0.27383122, -0.8502871,   0.44947574,  0.12551154],
+            [-0.96034825,  0.26719978, -0.07959669,  0.97476065],
+            [ 0.,          0.,          0.,          1.        ]])
+    elif robot_name == 'panda':
+        RT = np.array([[-0.61162336,  0.79089652,  0.01998741,  0.46388378],
+            [ 0.7883297,   0.6071185,   0.09971584, -0.15167381],
+            [ 0.06673018,  0.07674521, -0.99481508,  0.22877409],
+            [ 0.,          0.,          0.,          1.        ]])
+    else:
+        print(f'robot {robot_name} not supported')
+        sys.exit(1)    
+
+    # Setup robot
+    model_dir = os.path.join(root_dir, 'data', 'robots', cfg['robot_name'])
+    urdf_filename = os.path.join(root_dir, cfg['urdf_robot_path'])
+
+    robot = GTORobotModel(model_dir, urdf_filename=urdf_filename, 
+                        time_derivs=[0, 1],  # i.e. joint position/velocity trajectory
+                        param_joints=cfg['param_joints'],
+                        collision_link_names=cfg['collision_link_names'])
+    print('optimized joint names:', robot.optimized_joint_names)
+    
+    # sample some points as obstacles
+    points = 5 * np.random.randn(1000, 3)
+    robot.setup_occupancy_grid(points)
+
+    # Initialize planner
+    planner = BasePlanner(robot, cfg['link_ee'], cfg['link_gripper'])
+    qc = np.array(cfg['default_pose'])
+
+    # Plan base location
+    RT[:2, 3] += 2 * np.random.randn(2)
+    RT = np.expand_dims(RT, axis=0)
+    plan, y = planner.plan_goalset(qc, RT, robot.occupancy_grid)
+    RT_base = rotZ(y[2])
+    RT_base[0, 3] = y[0]
+    RT_base[1, 3] = y[1]
+    RT_base = np.linalg.inv(RT_base)
+    print(RT_base)
+
+    # visualization
+    # gripper
+    urdf_filename = os.path.join(root_dir, cfg['urdf_gripper_path'])
+    gripper = GTORobotModel(model_dir, urdf_filename=urdf_filename)     
+    planner.visualize(robot, gripper, qc, RT, RT_base)

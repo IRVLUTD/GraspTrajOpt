@@ -4,6 +4,19 @@ We introduce a new trajectory optimization method for robotic grasping based on 
 
 [arXiv](https://arxiv.org/abs/2403.05466), [Project](https://irvlutd.github.io/GraspTrajOpt/)
 
+### Citation
+
+If you find the package is useful in your research, please consider citing:
+
+    @misc{xiang2024grasping,
+      title={Grasping Trajectory Optimization with Point Clouds}, 
+      author={Yu Xiang and Sai Haneesh Allu and Rohith Peddi and Tyler Summers and Vibhav Gogate},
+      year={2024},
+      eprint={2403.05466},
+      archivePrefix={arXiv},
+      primaryClass={cs.RO}}
+
+
 ## Installation
 ```sh
 # create conda environment
@@ -20,7 +33,7 @@ pip install -r requirement.txt
   
 1. Download the SceneReplica data from [here](https://utdallas.box.com/s/nsrkk2o27a9sb8jnd8xqq0a7bk2srsa8). Unzip it to the root directory of this project.
 
-2. Run GTO planning with SceneReplica in PyBullet:
+2. Run GTO planning with SceneReplica in PyBullet. A result json file wil be saved.
    ```Shell
    cd examples/
    python pybullet_gto_planning.py --robot panda --scene_type tabletop --data_dir ../scenereplica_data
@@ -30,8 +43,64 @@ pip install -r requirement.txt
 - `--scene_type` : From {"tabletop", "shelf"}
 - `--data_dir` : The path for the SceneReplica data directory
 
+3. Experimental evaluation using a result json file
+   ```Shell
+   cd examples/
+   python pybullet_evaluate_plans.py --robot fetch --scene_type tabletop --data_dir ../scenereplica_data --file results_iros2024/GTO_scenereplica_fetch_tabletop_24-02-06_T181818.json
+   ```
+   The command line args:
+- `--robot` : From {"fetch", "panda"}
+- `--scene_type` : From {"tabletop", "shelf"}
+- `--data_dir` : The path for the SceneReplica data directory
+- `--moblie`: evaluation for mobile manipulation
+
 <p align="center" width="100%">
    <img src="./pics/example.png" alt="drawing" width="1200"/>
+</p>
+
+## PyBullet Tabletop Example
+   ```Shell
+   cd examples/
+   ```
+   ```Shell
+   python pybullet_gto_planning.py --robot fetch --scene_type tabletop --data_dir ../scenereplica_data
+   ```
+   ```Shell
+   python pybullet_gto_planning.py --robot panda --scene_type tabletop --data_dir ../scenereplica_data
+   ```
+
+<p align="center" width="100%">
+   <img src="./pics/GTO_tabletop.gif" alt="drawing" width="600"/>
+</p>
+
+## PyBullet Shelf Example
+   ```Shell
+   cd examples/
+   ```
+   ```Shell
+   python pybullet_gto_planning.py --robot fetch --scene_type shelf --data_dir ../scenereplica_data
+   ```
+   ```Shell
+   python pybullet_gto_planning.py --robot panda --scene_type shelf --data_dir ../scenereplica_data
+   ```
+
+<p align="center" width="100%">
+   <img src="./pics/GTO_shelf.gif" alt="drawing" width="600"/>
+</p>
+
+## PyBullet Mobile Manipulation Example
+   ```Shell
+   cd examples/
+   ```
+   ```Shell
+   python pybullet_gto_planning_mobile.py --robot fetch --scene_type tabletop --data_dir ../scenereplica_data
+   ```
+   ```Shell   
+   python pybullet_gto_planning_mobile.py --robot fetch --scene_type shelf --data_dir ../scenereplica_data
+   ```
+
+<p align="center" width="100%">
+   <img src="./pics/GTO_mobile.gif" alt="drawing" width="600"/>
 </p>
 
 ##  Running with Real Robots
@@ -43,6 +112,10 @@ We provide some examples of using the planner with a Fetch robot for the SceneRe
 2. Model-free grapsing: [https://github.com/IRVLUTD/SceneReplica/blob/gto_planning/src/bench_6dof_segmentation_grasping_gto.py](https://github.com/IRVLUTD/SceneReplica/blob/gto_planning/src/bench_6dof_segmentation_grasping_gto.py)
 
 3. The shelf grasping experiment is conducted with [https://github.com/IRVLUTD/SceneReplica/blob/gto_planning/src/model_free_grasping_gto.py](https://github.com/IRVLUTD/SceneReplica/blob/gto_planning/src/model_free_grasping_gto.py)
+
+<p align="center" width="100%">
+   <img src="./pics/GTO_real.gif" alt="drawing" width="600"/>
+</p>
 
 ## Note for adding a new robot
 - If joint limits are not presented in the urdf file, urdf_parser_py.urdf will set the joint limits to 0s. Make sure every joint has limits in the urdf file.

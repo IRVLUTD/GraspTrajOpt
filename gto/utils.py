@@ -21,6 +21,18 @@ def load_yaml(file_path):
     return yaml_params
 
 
+def rotZ(rotz):
+    RotZ = np.array(
+        [
+            [np.cos(rotz), -np.sin(rotz), 0, 0],
+            [np.sin(rotz), np.cos(rotz), 0, 0],
+            [0, 0, 1, 0],
+            [0, 0, 0, 1],
+        ]
+    )
+    return RotZ
+
+
 def default_pose(robot_model):
     # set robot pose
     # ['r_wheel_joint', 'l_wheel_joint', 'torso_lift_joint', 'head_pan_joint', 'head_tilt_joint', 'shoulder_pan_joint', 
@@ -72,7 +84,8 @@ def interpolate_waypoints(waypoints, n, m, mode="cubic"):  # linear
 
 def debug_plan(robot, gripper_model, base_position, plan, depth_pc, sdf_cost, RT_grasps_world, show_grasp=True):
     T = plan.shape[1]
-    for i in range(30, T):
+    base_position = np.array(base_position)
+    for i in range(45, T):
         q = plan[:, i]
         points_base, _ = robot.compute_fk_surface_points(q)
         points_world = points_base + base_position.reshape(1, 3)
@@ -85,10 +98,10 @@ def debug_plan(robot, gripper_model, base_position, plan, depth_pc, sdf_cost, RT
         vis.grid_floor()
         vis.points(depth_pc.points, rgb=[1, 1, 1])
         index = sdf_cost[offset] > 0
-        vis.points(points_world[~index], rgb=[0, 1, 1], size=5)
+        vis.points(points_world[~index], rgb=[1, 1, 0], size=5)
         vis.points(points_world[index], rgb=[1, 0, 0], size=5)
         index = sdf_cost > 0
-        vis.points(workspace_points[index], rgb=[1, 1, 0], size=3)
+        vis.points(workspace_points[index], rgb=[0, 1, 1], size=3)
         # vis.points(workspace_points[index], rgb=[0, 1, 0], size=10)        
         vis.robot(
             robot,
@@ -114,7 +127,7 @@ def debug_plan(robot, gripper_model, base_position, plan, depth_pc, sdf_cost, RT
         vis.start()  
 
 
-def visualize_plan(robot, gripper_model, base_position, plan, depth_pc, depth_pc_obstacle, RT_grasps_world):
+def visualize_plan(robot, gripper_model, base_position, plan, depth_pc_obstacle, RT_grasps_world):
     # visualize grasps
     vis = Visualizer(camera_position=[-1, 3.0, 5.0])
     vis.grid_floor()

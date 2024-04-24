@@ -11,9 +11,35 @@ from transforms3d.quaternions import mat2quat
 from utils import *
 
 
+def load_grasps(data_dir, robot_name, model):
+
+    if 'fetch' in robot_name:
+        # parse grasps
+        grasp_dir = os.path.join(data_dir, "grasp_data", "refined_grasps")
+        grasp_file = os.path.join(grasp_dir, f"fetch_gripper-{model}.json")
+        RT_grasps = parse_grasps(grasp_file)
+    elif robot_name == 'panda':
+        grasp_dir = os.path.join(data_dir, "grasp_data", "panda_simulated")
+        grasp_file = os.path.join(grasp_dir, f"{model}.npy")
+        try:
+            simulator_grasp = np.load(grasp_file, allow_pickle=True)
+            RT_grasps = simulator_grasp.item()["transforms"]
+        except:
+            simulator_grasp = np.load(
+                grasp_file,
+                allow_pickle=True,
+                fix_imports=True,
+                encoding="bytes",
+            )
+            RT_grasps = simulator_grasp.item()[b"transforms"]
+        offset_pose = np.array(rotZ(np.pi / 2))  # and
+        RT_grasps = np.matmul(RT_grasps, offset_pose)  # flip x, y 
+    return RT_grasps
+
+
 class SceneReplicaEnv():
 
-    def __init__(self, data_dir, robot_name='fetch', scene_type='tabletop'):
+    def __init__(self, urdf_filename, data_dir, robot_name='fetch', scene_type='tabletop', mobile=False):
 
         self.data_dir = data_dir
         self.model_dir = os.path.join(data_dir, "objects")
@@ -32,7 +58,7 @@ class SceneReplicaEnv():
         self.root_dir = os.path.dirname(os.path.abspath(__file__))
 
         self.connect()
-        if robot_name == 'fetch':
+        if 'fetch' in robot_name:
             base_position = np.array([0.0, 0.0, 0.0])
             arm_height = 1.1
         elif robot_name == 'panda':
@@ -41,6 +67,8 @@ class SceneReplicaEnv():
         else:
             print(f'robot {robot_name} not supported')
             sys.exit(1)
+        if mobile:
+            base_position[0] = base_position[0] - 2.0
         self.base_position = base_position
         self.arm_height = arm_height
         self.recorded_gripper_position = None
@@ -68,7 +96,22 @@ class SceneReplicaEnv():
             "040_large_marker",
             "052_extra_large_clamp",
         )
-        self.reset(robot_name, base_position)
+
+        # self.ycb_object_names = (
+        #     "004_sugar_box",
+        #     "005_tomato_soup_can",
+        #     "011_banana",
+        #     "024_bowl",
+        #     "035_power_drill",
+        # )        
+
+        # load grasps
+        self.RT_grasps = {}
+        for name in self.ycb_object_names:
+            print('loading grasps for ', robot_name, name)
+            self.RT_grasps[name] = load_grasps(self.data_dir, robot_name, name)
+
+        self.reset(urdf_filename, robot_name, base_position, mobile)
 
 
     def connect(self):
@@ -82,7 +125,7 @@ class SceneReplicaEnv():
             if self.scene_type == 'shelf':
                 p.resetDebugVisualizerCamera(2.0, -45.0, -41.0, [0.45, 0, 0.45])
             else:
-                p.resetDebugVisualizerCamera(1.8, 90.0, -45.0, [0.8, 0, 0.8])
+                p.resetDebugVisualizerCamera(1.8, 15.0, -41.0, [0.8, 0, 0.8])
         else:
             self.cid = p.connect(p.DIRECT)
 
@@ -101,7 +144,7 @@ class SceneReplicaEnv():
         p.setRealTimeSimulation(0)        
 
 
-    def reset(self, robot_name, base_position):
+    def reset(self, urdf_filename, robot_name, base_position, mobile):
 
         p.resetSimulation()
         p.setTimeStep(self._timeStep)
@@ -113,39 +156,46 @@ class SceneReplicaEnv():
         # set camera for recording propurse
         # Set the camera settings.
         if self.scene_type == 'tabletop':
-            look = [0.8, 0, 0.8]   
-            distance = 1.8
-            pitch = -45.0   
-            yaw = 90
+            self.look = [0.8, 0, 0.8]   
+            if mobile:
+                self.distance = 4.0
+            else:
+                self.distance = 1.8
+            self.pitch = -41.0   
+            self.yaw = 15
         else:
-            look = [0.45, 0, 1.0]   
-            distance = 1.6
-            pitch = -25.0   
-            yaw = -45.0
-        roll = 0
-        fov = 60.0
+            self.look = [0.45, 0, 1.0]
+            if mobile:
+                self.distance = 4.5
+            else:
+                self.distance = 1.6
+            self.pitch = -25.0   
+            self.yaw = -45.0
+        self.roll = 0
+        self.fov = 60.0
         self._view_matrix = p.computeViewMatrixFromYawPitchRoll(
-            look, distance, yaw, pitch, roll, 2
+            self.look, self.distance, self.yaw, self.pitch, self.roll, 2
         )
         aspect = float(self._window_width) / self._window_height
         self.near = 0.1
         self.far = 10
         self._proj_matrix = p.computeProjectionMatrixFOV(
-            fov, aspect, self.near, self.far
+            self.fov, aspect, self.near, self.far
         )                
 
-        # set robot
-        if robot_name == 'fetch':
-            base_position = np.zeros((3, ))
-            self.robot = Fetch(base_position, self.scene_type)
-        elif robot_name == 'panda':
-            self.robot = Panda(base_position, self.scene_type)        
-        self.robot.retract()    
-
-        # Set table and plane
+        # Set plane
         plane_file = os.path.join(self.root_dir, '../data/objects/floor/model_normalized.urdf') # _white
         self.plane_id = p.loadURDF(plane_file, [0, 0, 0])
         self.light_position = np.array([-1.0, 0, 2.5])
+
+        # set robot
+        if 'fetch' in robot_name:
+            self.robot = Fetch(urdf_filename, base_position, self.scene_type, fix_base=not mobile)
+        elif robot_name == 'panda':
+            self.robot = Panda(urdf_filename, base_position, self.scene_type, fix_base=not mobile)        
+        self.robot.retract()
+
+        # Set table
         if self.scene_type == 'tabletop':
             table_file = os.path.join(self.root_dir, '../data/objects/cafe_table/cafe_table.urdf')
             texture_file = os.path.join(self.root_dir, '../data/objects/cafe_table/materials/textures/Maple.jpg')
@@ -188,7 +238,13 @@ class SceneReplicaEnv():
         self.object_uids = []
         self.object_names = []
         self.cache_object_poses = []
-        self.cache_objects()     
+        self.cache_objects()
+
+
+    def update_view_matrix(self):
+        self._view_matrix = p.computeViewMatrixFromYawPitchRoll(
+            self.look, self.distance, self.yaw, self.pitch, self.roll, 2
+        )
 
 
     def cache_objects(self):
@@ -217,7 +273,7 @@ class SceneReplicaEnv():
                 spinningFriction=1.0,
                 rollingFriction=1.0,
                 lateralFriction=1.0,
-            )      
+            )
 
 
     def setup_scene(self, scene_id):
@@ -316,6 +372,8 @@ class SceneReplicaEnv():
             if name not in names:
                 position, orientation = self.cache_object_poses[i]
                 self.set_object_pose(name, position, orientation)
+        # set robot
+        self.set_robot_pose(self.base_position, orn=[0, 0, 0, 1])
         # start simulation
         self.start()
         time.sleep(2.0)
@@ -363,7 +421,15 @@ class SceneReplicaEnv():
 
     def set_object_pose(self, name, pos, orn):
         idx = self.object_uids[self.object_names.index(name)]
-        p.resetBasePositionAndOrientation(idx, pos, orn)        
+        p.resetBasePositionAndOrientation(idx, pos, orn)
+
+
+    def get_robot_pose(self):
+        return p.getBasePositionAndOrientation(self.robot._id)
+    
+
+    def set_robot_pose(self, pos, orn):
+        p.resetBasePositionAndOrientation(self.robot._id, pos, orn)               
 
 
     def get_camera_view(self):
@@ -467,6 +533,17 @@ class SceneReplicaEnv():
             p.stepSimulation()
 
 
+    def write_video_frame(self, video_writer):
+        _, _, rgba, depth, mask = p.getCameraImage(
+            width=self._window_width,
+            height=self._window_height,
+            viewMatrix=self._view_matrix,
+            projectionMatrix=self._proj_matrix,
+            physicsClientId=self.cid,
+        )
+        video_writer.write(rgba[:, :, [2, 1, 0]].astype(np.uint8))     
+
+
     def execute_plan(self, plan, video_writer=None):
         '''
         @ param plan: shape (ndof, T)
@@ -543,33 +620,8 @@ class SceneReplicaEnv():
                     projectionMatrix=self._proj_matrix,
                     physicsClientId=self.cid,
                 )
-                video_writer.write(rgba[:, :, [2, 1, 0]].astype(np.uint8))            
-    
+                video_writer.write(rgba[:, :, [2, 1, 0]].astype(np.uint8))
 
-def load_grasps(data_dir, robot_name, model):
-
-    if robot_name == 'fetch':
-        # parse grasps
-        grasp_dir = os.path.join(data_dir, "grasp_data", "refined_grasps")
-        grasp_file = os.path.join(grasp_dir, f"fetch_gripper-{model}.json")
-        RT_grasps = parse_grasps(grasp_file)
-    elif robot_name == 'panda':
-        grasp_dir = os.path.join(data_dir, "grasp_data", "panda_simulated")
-        grasp_file = os.path.join(grasp_dir, f"{model}.npy")
-        try:
-            simulator_grasp = np.load(grasp_file, allow_pickle=True)
-            RT_grasps = simulator_grasp.item()["transforms"]
-        except:
-            simulator_grasp = np.load(
-                grasp_file,
-                allow_pickle=True,
-                fix_imports=True,
-                encoding="bytes",
-            )
-            RT_grasps = simulator_grasp.item()[b"transforms"]
-        offset_pose = np.array(rotZ(np.pi / 2))  # and
-        RT_grasps = np.matmul(RT_grasps, offset_pose)  # flip x, y 
-    return RT_grasps  
 
 
 def make_args():
@@ -603,7 +655,7 @@ def make_args():
         type=int,
         default=10,
         help="SceneReplica scene id",
-    )         
+    )
     args = parser.parse_args()
     return args
         
@@ -615,10 +667,13 @@ if __name__ == '__main__':
     data_dir = args.data_dir
     scene_id = args.scene_id
     scene_type = args.scene_type
+    urdf_filename = '../data/robots/fetch/fetch.urdf'
 
     # create the table environment
-    env = SceneReplicaEnv(data_dir, robot_name, scene_type)
+    env = SceneReplicaEnv(urdf_filename, data_dir, robot_name, scene_type, mobile=True)
     for scene_id in [36, 84, 68, 10, 77, 148, 48, 25, 104, 38, 27, 122, 141, 65, 39, 83, 130, 161, 33, 56]:
+        env.start()
+        env.robot.move_to_xy(x_delta=2.0, y_delta=0.0)
         env.setup_scene(scene_id)
         rgba, depth, mask, cam_pose, intrinsic_matrix = env.get_observation()
         input('next scene?')

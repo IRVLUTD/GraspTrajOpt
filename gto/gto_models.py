@@ -10,6 +10,7 @@ import trimesh
 import optas
 import pyrender
 import casadi as cs
+from sklearn.neighbors import KDTree
 from optas.spatialmath import rt2tr, rpy2r, ArrayType
 from optas.models import RobotModel
 from optas.visualize import Visualizer
@@ -42,7 +43,7 @@ class GTORobotModel(RobotModel):
         self.surface_pc_map = self.compute_link_surface_points()
         self.visual_tf = self.setup_fk_functions()
         self.field_margin = 0.4
-        self.grid_resolution = 0.05
+        self.grid_resolution = 0.05     
         
 
     def get_standoff_pose(self, offset, axis):
@@ -212,6 +213,83 @@ class GTORobotModel(RobotModel):
 
         dist = np.linalg.norm(plan[:, 0] - plan[:, T-1])
         return cost, dist
+    
+
+    # build an x-y plane occupancy grid using points in robot base
+    def setup_occupancy_grid(self, points, epsilon=0.02):
+        index = points[:, 2] > 0.01
+        xys = points[index, :2]
+        self.xlim_2d = [0, np.max(xys[:, 0])]
+        self.ylim_2d = [np.min(xys[:, 1]), np.max(xys[:, 1])]
+        self.occupancy_grid_origin = np.array([self.xlim_2d[0] - self.field_margin, self.ylim_2d[0] - self.field_margin]).reshape((1, 2))
+        self.xgrid = np.arange(self.xlim_2d[0] - self.field_margin, self.xlim_2d[1] + self.field_margin, self.grid_resolution)
+        self.ygrid = np.arange(self.ylim_2d[0] - self.field_margin, self.ylim_2d[1] + self.field_margin, self.grid_resolution)
+        workspace_points = np.array(np.meshgrid(
+                            np.arange(self.xlim_2d[0] - self.field_margin, self.xlim_2d[1] + self.field_margin, self.grid_resolution),
+                            np.arange(self.ylim_2d[0] - self.field_margin, self.ylim_2d[1] + self.field_margin, self.grid_resolution),
+                            indexing='ij'))
+        
+        # build the grid
+        self.occupancy_grid_shape = workspace_points.shape[1:]
+        workspace_points = workspace_points.reshape((2, -1)).T
+        kd_tree = KDTree(xys)
+        distances, indices = kd_tree.query(workspace_points)
+        cost = np.zeros_like(distances)
+        index = distances < epsilon
+        cost[index] = 1
+        self.occupancy_grid_size = workspace_points.shape[0]
+        self.occupancy_grid = cost.copy()
+        print('occupancy grid origin', self.occupancy_grid_origin)
+        print('occupancy grid shape', self.occupancy_grid_shape)
+        print('occupancy grid field', self.occupancy_grid.shape)
+
+
+    def points_to_offsets_occupancy(self, points):
+        n = points.shape[0]
+        xys = points[:, :2]
+        origin = np.repeat(self.occupancy_grid_origin, n, axis=0)
+        idxes = optas.floor((xys - origin) / self.grid_resolution)
+        idxes[:, 0] = cs.fmax(idxes[:, 0], 0)
+        idxes[:, 0] = cs.fmin(idxes[:, 0], self.occupancy_grid_shape[0] - 1)
+        idxes[:, 1] = cs.fmax(idxes[:, 1], 0)
+        idxes[:, 1] = cs.fmin(idxes[:, 1], self.occupancy_grid_shape[1] - 1)
+        # offset = n_3 + N_3 * (n_2 + N_2 * n_1)
+        # https://eli.thegreenplace.net/2015/memory-layout-of-multi-dimensional-arrays
+        offsets = idxes[:, 1] + self.occupancy_grid_shape[1] * idxes[:, 0]
+        return offsets
+    
+
+    def points_to_offsets_occupancy_numpy(self, points):
+        n = points.shape[0]
+        xys = points[:, :2]
+        origin = np.repeat(self.occupancy_grid_origin, n, axis=0)
+        idxes = np.floor((xys - origin) / self.grid_resolution)
+        idxes[:, 0] = np.clip(idxes[:, 0], 0, self.occupancy_grid_shape[0] - 1).astype(np.int32)
+        idxes[:, 1] = np.clip(idxes[:, 1], 0, self.occupancy_grid_shape[1] - 1).astype(np.int32)
+        # offset = n_3 + N_3 * (n_2 + N_2 * n_1)
+        # https://eli.thegreenplace.net/2015/memory-layout-of-multi-dimensional-arrays
+        offsets = idxes[:, 1] + self.occupancy_grid_shape[1] * idxes[:, 0]
+        return offsets.astype(np.int32)
+    
+
+    def setup_occupancy_grid_function(self):
+        qc = cs.MX.sym("qc", self.ndof)
+        tf_base_inv = cs.MX.sym("tf_base_inv", 4, 4)
+        occupancy_grid = cs.MX.sym("occupancy_grid", self.occupancy_grid_size)
+
+        points_world_all = None
+        for name in self.surface_pc_map.keys():
+            tf = tf_base_inv @ self.visual_tf[name](qc)
+            points = self.surface_pc_map[name].points
+            points_world = tf[:3, :3] @ points.T + tf[:3, 3].reshape((3, 1))
+            if points_world_all is None:
+                points_world_all = points_world
+            else:
+                points_world_all = optas.horzcat(points_world_all, points_world)
+        points_world_all = points_world_all.T
+        offsets = self.points_to_offsets_occupancy(points_world_all)
+        cost = optas.sum1(occupancy_grid[offsets])
+        return cs.Function(f"occupancy_grid_cost", [qc, tf_base_inv, occupancy_grid], [cost])
 
 
 def make_args():
@@ -252,10 +330,11 @@ if __name__ == "__main__":
                           collision_link_names=None)
     robot_model.setup_workspace_field(arm_len=cfg['arm_len'], arm_height=cfg['arm_height'])
     print(robot_model.link_names)
+    print(robot_model.actuated_joint_names)
 
     # forward kinematics
     q_user_input = np.array([0.0] * robot_model.ndof)
-    if robot_name == 'fetch':
+    if 'fetch' in robot_name:
         q_user_input[2] = 0.4
         q_user_input[cfg['finger_index']] = 0.05
     elif robot_name == 'panda':
