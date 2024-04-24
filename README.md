@@ -34,6 +34,18 @@ pip install -r requirement.txt
    <img src="./pics/example.png" alt="drawing" width="1200"/>
 </p>
 
+## PyBullet Tabletop Example
+
+<p align="center" width="100%">
+   <img src="./pics/GTO_tabletop.gif" alt="drawing" width="800"/>
+</p>
+
+## PyBullet Shelf Example
+
+<p align="center" width="100%">
+   <img src="./pics/GTO_shelf.gif" alt="drawing" width="800"/>
+</p>
+
 ##  Running with Real Robots
 We provide some examples of using the planner with a Fetch robot for the SceneReplica benchmark:
 [https://github.com/IRVLUTD/SceneReplica/tree/gto_planning](https://github.com/IRVLUTD/SceneReplica/tree/gto_planning)

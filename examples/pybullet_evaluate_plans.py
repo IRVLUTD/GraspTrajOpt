@@ -151,7 +151,7 @@ if __name__ == '__main__':
                 orn = [quat[1], quat[2], quat[3], quat[0]]
                 env.set_robot_pose(pos, orn)
                 # fix base
-                p.changeDynamics(env.robot._id, -1, mass=0)        
+                p.changeDynamics(env.robot._id, -1, mass=0)   
 
             set_objects = set(object_order)
             for object_name in object_order:

@@ -390,7 +390,11 @@ class Fetch(FixedBaseRobot):
         return pos[0], pos[1], yaw
     
 
-    def move_to_xy(self, x_delta, y_delta):
+    def write_video_frame(self, env, video_writer):
+        env.write_video_frame(video_writer)
+    
+
+    def move_to_xy(self, x_delta, y_delta, env=None, video_writer=None):
         # global pose
         x, y, theta = self.get_base_pose()
         x_goal = x + x_delta
@@ -420,6 +424,9 @@ class Fetch(FixedBaseRobot):
                 w = np.sign(w) * self.MAX_ANGULAR_SPEED
             print('linear velocity', v, 'angular velocity', w)
 
+            if video_writer is not None:
+                self.write_video_frame(env, video_writer)
+
             # send command to robot
             right_wheel_joint_vel, left_wheel_joint_vel = self.command_to_control([v, w])
             self.cmd_wheel_velocities([right_wheel_joint_vel, left_wheel_joint_vel])
@@ -430,7 +437,7 @@ class Fetch(FixedBaseRobot):
         self.cmd_wheel_velocities([0, 0])
 
 
-    def move_to_theta(self, theta_delta):
+    def move_to_theta(self, theta_delta, env=None, video_writer=None):
         # global pose
         x, y, theta = self.get_base_pose()
         theta_goal = theta + theta_delta
@@ -446,6 +453,9 @@ class Fetch(FixedBaseRobot):
             if abs(w) > self.MAX_ANGULAR_SPEED:
                 w = np.sign(w) * self.MAX_ANGULAR_SPEED
             print('linear velocity', v, 'angular velocity', w)
+
+            if video_writer is not None:
+                self.write_video_frame(env, video_writer)            
 
             # send command to robot
             right_wheel_joint_vel, left_wheel_joint_vel = self.command_to_control([v, w])

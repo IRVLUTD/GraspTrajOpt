@@ -125,7 +125,7 @@ class SceneReplicaEnv():
             if self.scene_type == 'shelf':
                 p.resetDebugVisualizerCamera(2.0, -45.0, -41.0, [0.45, 0, 0.45])
             else:
-                p.resetDebugVisualizerCamera(1.8, 90.0, -45.0, [0.8, 0, 0.8])
+                p.resetDebugVisualizerCamera(1.8, 15.0, -41.0, [0.8, 0, 0.8])
         else:
             self.cid = p.connect(p.DIRECT)
 
@@ -156,25 +156,31 @@ class SceneReplicaEnv():
         # set camera for recording propurse
         # Set the camera settings.
         if self.scene_type == 'tabletop':
-            look = [0.8, 0, 0.8]   
-            distance = 1.8
-            pitch = -45.0   
-            yaw = 90
+            self.look = [0.8, 0, 0.8]   
+            if mobile:
+                self.distance = 4.0
+            else:
+                self.distance = 1.8
+            self.pitch = -41.0   
+            self.yaw = 15
         else:
-            look = [0.45, 0, 1.0]   
-            distance = 1.6
-            pitch = -25.0   
-            yaw = -45.0
-        roll = 0
-        fov = 60.0
+            self.look = [0.45, 0, 1.0]
+            if mobile:
+                self.distance = 4.5
+            else:
+                self.distance = 1.6
+            self.pitch = -25.0   
+            self.yaw = -45.0
+        self.roll = 0
+        self.fov = 60.0
         self._view_matrix = p.computeViewMatrixFromYawPitchRoll(
-            look, distance, yaw, pitch, roll, 2
+            self.look, self.distance, self.yaw, self.pitch, self.roll, 2
         )
         aspect = float(self._window_width) / self._window_height
         self.near = 0.1
         self.far = 10
         self._proj_matrix = p.computeProjectionMatrixFOV(
-            fov, aspect, self.near, self.far
+            self.fov, aspect, self.near, self.far
         )                
 
         # Set plane
@@ -235,6 +241,12 @@ class SceneReplicaEnv():
         self.cache_objects()
 
 
+    def update_view_matrix(self):
+        self._view_matrix = p.computeViewMatrixFromYawPitchRoll(
+            self.look, self.distance, self.yaw, self.pitch, self.roll, 2
+        )
+
+
     def cache_objects(self):
         """
         Load all YCB objects and set up (only work for single apperance)
@@ -261,7 +273,7 @@ class SceneReplicaEnv():
                 spinningFriction=1.0,
                 rollingFriction=1.0,
                 lateralFriction=1.0,
-            )      
+            )
 
 
     def setup_scene(self, scene_id):
@@ -519,6 +531,17 @@ class SceneReplicaEnv():
         self.robot.cmd(action)
         for _ in range(400):
             p.stepSimulation()
+
+
+    def write_video_frame(self, video_writer):
+        _, _, rgba, depth, mask = p.getCameraImage(
+            width=self._window_width,
+            height=self._window_height,
+            viewMatrix=self._view_matrix,
+            projectionMatrix=self._proj_matrix,
+            physicsClientId=self.cid,
+        )
+        video_writer.write(rgba[:, :, [2, 1, 0]].astype(np.uint8))     
 
 
     def execute_plan(self, plan, video_writer=None):
