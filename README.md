@@ -4,6 +4,19 @@ We introduce a new trajectory optimization method for robotic grasping based on 
 
 [arXiv](https://arxiv.org/abs/2403.05466), [Project](https://irvlutd.github.io/GraspTrajOpt/)
 
+### Citation
+
+If you find the package is useful in your research, please consider citing:
+
+    @misc{xiang2024grasping,
+      title={Grasping Trajectory Optimization with Point Clouds}, 
+      author={Yu Xiang and Sai Haneesh Allu and Rohith Peddi and Tyler Summers and Vibhav Gogate},
+      year={2024},
+      eprint={2403.05466},
+      archivePrefix={arXiv},
+      primaryClass={cs.RO}}
+
+
 ## Installation
 ```sh
 # create conda environment
@@ -48,7 +61,11 @@ pip install -r requirement.txt
 ## PyBullet Tabletop Example
    ```Shell
    cd examples/
+   ```
+   ```Shell
    python pybullet_gto_planning.py --robot fetch --scene_type tabletop --data_dir ../scenereplica_data
+   ```
+   ```Shell
    python pybullet_gto_planning.py --robot panda --scene_type tabletop --data_dir ../scenereplica_data
    ```
 
@@ -59,7 +76,11 @@ pip install -r requirement.txt
 ## PyBullet Shelf Example
    ```Shell
    cd examples/
+   ```
+   ```Shell
    python pybullet_gto_planning.py --robot fetch --scene_type shelf --data_dir ../scenereplica_data
+   ```
+   ```Shell
    python pybullet_gto_planning.py --robot panda --scene_type shelf --data_dir ../scenereplica_data
    ```
 
@@ -70,7 +91,11 @@ pip install -r requirement.txt
 ## PyBullet Mobile Manipulation Example
    ```Shell
    cd examples/
+   ```
+   ```Shell
    python pybullet_gto_planning_mobile.py --robot fetch --scene_type tabletop --data_dir ../scenereplica_data
+   ```
+   ```Shell   
    python pybullet_gto_planning_mobile.py --robot fetch --scene_type shelf --data_dir ../scenereplica_data
    ```
 
