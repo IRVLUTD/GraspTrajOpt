@@ -32,7 +32,7 @@ class BasePlanner:
         self.gripper_tf = robot.get_link_transform_function(link=link_gripper, base_link=link_ee)
 
 
-    def setup_optimization(self, goal_size=1):
+    def setup_optimization(self, goal_size=1, base_effort_weight=0.01):
         # Setup optimization builder
         builder = optas.OptimizationBuilder(T=goal_size, robots=[self.robot], tasks=[self.task])
 
@@ -55,7 +55,7 @@ class BasePlanner:
         builder.add_bound_inequality_constraint("theta_bound", -np.pi, theta, np.pi)
 
         # penalize movement
-        builder.add_cost_term("cost_effort", 0.01 * optas.sumsqr(q))
+        builder.add_cost_term("cost_effort", base_effort_weight * optas.sumsqr(q))
 
         # Get joint trajectory
         Q = builder.get_robot_states_and_parameters(

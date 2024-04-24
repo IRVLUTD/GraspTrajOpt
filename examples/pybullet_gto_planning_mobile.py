@@ -70,6 +70,10 @@ if __name__ == '__main__':
         ik_collision_threshold = 5
         interpolate = True
         orderings = ["nearest_first", "random"]
+        # define the standoff pose for collision checking
+        offset = -0.01
+        grasp_collision_threshold = 0.01
+        base_effort_weight = 0.01
     elif scene_type == 'shelf':
         standoff_distance = -0.2
         standoff_offset = -10
@@ -77,12 +81,14 @@ if __name__ == '__main__':
         ik_collision_threshold = 0.001
         interpolate = False
         orderings = ["random"]
+        # define the standoff pose for collision checking
+        offset = 0
+        grasp_collision_threshold = 0
+        base_effort_weight = 5.0
     else:
         print('unsupported scene type:', scene_type)
         sys.exit(1)
-    # define the standoff pose for collision checking
-    offset = -0.01
-
+    
     # load config file
     root_dir = get_root_dir()
     config_file = os.path.join(root_dir, 'data', 'configs', f'{robot_name}.yaml')
@@ -179,7 +185,7 @@ if __name__ == '__main__':
 
             # plan base location until no collision
             num = 2   # sample num grasps for each object
-            base_planner.setup_optimization(num * len(object_order))
+            base_planner.setup_optimization(num * len(object_order), base_effort_weight)
             while 1:
                 grasps = []
                 for object_name in object_order:
@@ -241,7 +247,7 @@ if __name__ == '__main__':
             results = {'RT_base_new': RT_base_new.tolist()}
             set_objects = set(object_order)
             for object_name in object_order:
-                # if object_name != '005_tomato_soup_can':
+                # if object_name != '006_mustard_bottle':
                 #     env.reset_objects(object_name)
                 #     set_objects.remove(object_name)
                 #     continue
@@ -260,7 +266,12 @@ if __name__ == '__main__':
 
                 # camera look at object
                 print('look at', object_name)
-                env.robot.look_at_point(RT_obj[:3, 3])       
+                if scene_type == 'tabletop':
+                    env.robot.look_at_point(RT_obj[:3, 3])
+                else:
+                    lookat = RT_obj[:3, 3].copy()
+                    lookat[2] += 0.1
+                    env.robot.look_at_point(lookat)
 
                 # render image and compute sdf cost field
                 rgba, depth, mask, cam_pose, intrinsic_matrix = env.get_observation()
@@ -314,19 +325,20 @@ if __name__ == '__main__':
 
                     ratio = np.sum(sdf < 0) / len(sdf)
                     print(f'grasp {i}, collision ratio {ratio}')
-                    if ratio > 0.01:
+                    if ratio > grasp_collision_threshold:
                         in_collision[i] = 1
 
                     # visualization
                     # import pyrender
-                    # colors = np.zeros(gripper_points.shape)
-                    # colors[sdf < 0, 2] = 1
-                    # colors[sdf > 0, 0] = 1
-                    # cloud = pyrender.Mesh.from_points(gripper_points, colors=colors)
-                    # scene = pyrender.Scene()
-                    # scene.add(cloud)
-                    # scene.add(pyrender.Mesh.from_points(depth_pc.points))
-                    # pyrender.Viewer(scene, use_raymond_lighting=True, point_size=2)
+                    # if in_collision[i] == 0:
+                    #     colors = np.zeros(gripper_points.shape)
+                    #     colors[sdf < 0, 2] = 1
+                    #     colors[sdf > 0, 0] = 1
+                    #     cloud = pyrender.Mesh.from_points(gripper_points, colors=colors)
+                    #     scene = pyrender.Scene()
+                    #     scene.add(cloud)
+                    #     scene.add(pyrender.Mesh.from_points(depth_pc.points[::10, :]))
+                    #     pyrender.Viewer(scene, use_raymond_lighting=True, point_size=2)
                 
                 RT_grasps_base = RT_grasps_base[in_collision == 0]
                 checking_time = time.time() - start

@@ -600,6 +600,7 @@ class SceneReplicaEnv():
                 video_writer.write(rgba[:, :, [2, 1, 0]].astype(np.uint8))
 
 
+
 def make_args():
     parser = argparse.ArgumentParser(
         description="Generate grid and spawn objects", add_help=True

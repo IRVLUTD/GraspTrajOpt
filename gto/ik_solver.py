@@ -108,6 +108,11 @@ class IKSolver:
         print('rotation error in degree', err_rot)
         print('collision cost', cost)
         return q.toarray().flatten(), err_pos, err_rot, cost
+    
+
+    # forward kinematics
+    def solve_fk(self, q_0):
+        return self.fk(q_0).toarray()
 
 
 def make_args():

@@ -220,16 +220,17 @@ class FixedBaseRobot:
     def default_pose(self):
         return np.zeros((self.ndof, ))
     
-    def execute_plan(self, plan):
+    def execute_plan(self, plan, num=None):
         '''
         @ param plan: shape (ndof, T)
         '''        
         for t in range(plan.shape[1]):
             self.cmd(plan[:, t])
-            if t >= plan.shape[1] - 5:
-                num = 500
-            else:
-                num = 200
+            if num is None:
+                if t >= plan.shape[1] - 5:
+                    num = 500
+                else:
+                    num = 200
             for _ in range(num):
                 p.stepSimulation()
 
