@@ -37,13 +37,13 @@ pip install -r requirement.txt
 ## PyBullet Tabletop Example
 
 <p align="center" width="100%">
-   <img src="./pics/GTO_tabletop.gif" alt="drawing" width="800"/>
+   <img src="./pics/GTO_tabletop.gif" alt="drawing" width="600"/>
 </p>
 
 ## PyBullet Shelf Example
 
 <p align="center" width="100%">
-   <img src="./pics/GTO_shelf.gif" alt="drawing" width="800"/>
+   <img src="./pics/GTO_shelf.gif" alt="drawing" width="600"/>
 </p>
 
 ##  Running with Real Robots
