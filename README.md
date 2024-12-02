@@ -52,7 +52,7 @@ pip install -r requirement.txt
 - `--robot` : From {"fetch", "panda"}
 - `--scene_type` : From {"tabletop", "shelf"}
 - `--data_dir` : The path for the SceneReplica data directory
-- `--moblie`: evaluation for mobile manipulation
+- `--mobile`: evaluation for mobile manipulation
 
 <p align="center" width="100%">
    <img src="./pics/example.png" alt="drawing" width="1200"/>
